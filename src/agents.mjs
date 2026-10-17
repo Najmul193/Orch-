@@ -18,7 +18,9 @@ export const agents = {
       if (d.type === 'tool_use') {
         const { tool, state = {} } = d.part
         const what = state.input?.command ?? state.input?.filePath ?? state.title ?? ''
-        if (state.status === 'error') return [{ kind: 'error', text: `${tool} failed: ${short(String(state.error ?? what))}`, session }]
+        // A tool that errored (a 403 fetch, a bad path) is a normal hiccup the model can
+        // work around — surface it as a warning, never as a run-ending error.
+        if (state.status === 'error') return [{ kind: 'warn', text: `${tool} failed: ${short(String(state.error ?? what))}`, session }]
         return [{ kind: 'tool', text: `${tool}: ${short(String(what))}`, session }]
       }
       if (d.type === 'error') return [{ kind: 'error', text: d.error?.data?.message ?? d.error?.name ?? 'error', session }]

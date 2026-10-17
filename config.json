@@ -1,7 +1,7 @@
 {
   "port": 7777,
   "defaultDir": "~/clt",
-  "maxParallel": 3,
+  "maxParallel": 6,
   "cooldownMinutes": 15,
   "claudeHandoff": false,
   "autoHandoff": false,

@@ -10,7 +10,7 @@ const fakeAgent = {
   cmd: process.execPath,
   argv: (task, model) => [new URL('fake-agent.mjs', import.meta.url).pathname, model, task],
   resume: () => '',
-  parser: () => (d) => (d.error ? [{ kind: 'error', text: d.error }] : [{ kind: 'text', text: d.text }]),
+  parser: () => (d) => (d.warn ? [{ kind: 'warn', text: d.warn }] : d.error ? [{ kind: 'error', text: d.error }] : [{ kind: 'text', text: d.text }]),
 }
 
 function makeRunner(chain) {
@@ -52,6 +52,15 @@ test('all entries failing marks the run failed; disabled entries are skipped', a
   assert.equal(run.status, 'failed')
   assert.match(run.error, /model crashed/)
   assert.deepEqual(run.attempts.map((a) => a.model), ['broken'])
+})
+
+test('a failed tool is a warning, not a run failure', async () => {
+  const runner = makeRunner([{ agent: 'fake', model: 'toolerr' }, { agent: 'fake', model: 'ok' }])
+  const run = await finished(runner, runner.start({ task: 't', dir: os.tmpdir() }))
+  assert.equal(run.status, 'done')
+  assert.equal(run.model, 'toolerr') // did not fall through to "ok"
+  assert.equal(run.attempts.length, 1)
+  assert.equal(run.final, 'done toolerr')
 })
 
 test('kill stops a running agent', async () => {

@@ -8,7 +8,10 @@ if (mode === 'broken') {
   console.log(JSON.stringify({ error: 'model crashed' }))
   process.exit(1)
 }
-if (mode === 'risky') {
+if (mode === 'toolerr') {
+  console.log(JSON.stringify({ warn: 'webfetch failed: StatusCode: non 2xx status code (403 GET https://example.com/x)' }))
+  setTimeout(() => { console.log(JSON.stringify({ text: 'done toolerr' })); process.exit(0) }, 150)
+} else if (mode === 'risky') {
   console.log(JSON.stringify({ type: 'tool', text: 'bash: rm -rf build' }))
   setTimeout(() => { console.log(JSON.stringify({ type: 'text', text: 'done risky' })); process.exit(0) }, 1200)
 } else if (mode === 'slow') setTimeout(() => {}, 60_000)

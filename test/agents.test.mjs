@@ -23,6 +23,13 @@ test('opencode: error event', () => {
   assert.deepEqual(evs.map((e) => e.kind), ['error'])
 })
 
+test('opencode: a failed tool is a warn, not a fatal error', () => {
+  const parse = agents.opencode.parser()
+  const evs = parse({ type: 'tool_use', part: { tool: 'webfetch', state: { status: 'error', error: 'StatusCode: non 2xx status code (403 GET https://example.com/x)', input: {} } } })
+  assert.equal(evs[0].kind, 'warn')
+  assert.match(evs[0].text, /webfetch failed: .*403/)
+})
+
 test('agy: tools, streamed text and final result from a real run', () => {
   const evs = parseFixture('agy', 'agy.jsonl')
   assert.equal(evs[0].session, '5a60a89a-7316-4548-96ce-89de05c06ade')

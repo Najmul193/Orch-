@@ -14,7 +14,7 @@ const fakeAgent = {
   cmd: process.execPath,
   argv: (task, model) => [new URL('fake-agent.mjs', import.meta.url).pathname, model, task],
   resume: () => '',
-  parser: () => (d) => (d.error ? [{ kind: 'error', text: d.error }] : [{ kind: 'text', text: d.text }]),
+  parser: () => (d) => (d.warn ? [{ kind: 'warn', text: d.warn }] : d.error ? [{ kind: 'error', text: d.error }] : [{ kind: 'text', text: d.text }]),
 }
 
 function makeRunner({ chain, config = {}, planner } = {}) {
