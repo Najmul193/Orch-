@@ -52,6 +52,7 @@
     ]
   },
   "fanout": true,
+  "openOnPermission": true,
   "heartbeatMs": 5000,
   "plannerTimeoutMs": 25000,
   "attemptTimeoutMs": 60000,

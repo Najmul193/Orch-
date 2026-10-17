@@ -10,7 +10,7 @@ import { discoverPool, buildChain } from './pool.mjs'
 import { buildHandoffPrompt, readTranscript } from './handoff.mjs'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
-const EDITABLE = ['chains', 'autoHandoff', 'maxParallel', 'cooldownMinutes', 'fanout', 'local', 'claudeHandoff', 'permissions']
+const EDITABLE = ['chains', 'autoHandoff', 'maxParallel', 'cooldownMinutes', 'fanout', 'local', 'claudeHandoff', 'permissions', 'openOnPermission']
 
 export const expandHome = (p) => p.replace(/^~(?=$|\/)/, os.homedir())
 
@@ -35,10 +35,27 @@ export function createApp({ configPath = process.env.ORCH_CONFIG || path.join(RO
   const cooldowns = () => Object.fromEntries(Object.entries(runner.cooldowns).filter(([, t]) => t > Date.now()))
 
   runner.on('event', (ev) => send({ type: 'event', ev }))
-  runner.on('run', (run) => send({ type: 'run', run }))
+  runner.on('run', (run) => { send({ type: 'run', run }); maybeOpenForPermission(run) })
   runner.on('cooldowns', () => send({ type: 'config', config, cooldowns: cooldowns() }))
   runner.on('config', () => send({ type: 'config', config, cooldowns: cooldowns() }))
   watch.on('session', (session) => send({ type: 'session', session }))
+
+  // When an agent is parked waiting for your permission, bring the dashboard to the
+  // front so you can Allow or Deny it. One tab per request, throttled.
+  const journal = new Set()
+  let lastOpen = 0
+  function maybeOpenForPermission(run) {
+    const id = run.permission?.id
+    if (!id || journal.has(id) || config.openOnPermission === false) return
+    journal.add(id)
+    if (Date.now() - lastOpen < 3000) return
+    lastOpen = Date.now()
+    console.log(`permission needed for run ${run.id} -> opening dashboard`)
+    const [cmd, prefix] = process.platform === 'darwin' ? ['open', []]
+      : process.platform === 'win32' ? ['cmd', ['/c', 'start', '']]
+      : ['xdg-open', []]
+    execFile(cmd, [...prefix, `http://127.0.0.1:${config.port}`], () => {})
+  }
 
   function handoff(sessionId) {
     const s = watch.sessions.get(sessionId)
