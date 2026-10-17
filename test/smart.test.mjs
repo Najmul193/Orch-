@@ -102,7 +102,18 @@ test('a model that never responds times out and the chain moves on', async () =>
   const run = await finished(runner, runner.start({ task: 'hello there', dir: os.tmpdir() }))
   assert.equal(run.status, 'done')
   assert.equal(run.model, 'ok')
-  assert.match(run.attempts[0].error, /no response/)
+  assert.match(run.attempts[0].error, /no output/)
+})
+
+test('a model that keeps streaming past the idle timeout is not killed', async () => {
+  const chain = [{ agent: 'fake', model: 'chatty', enabled: true }, { agent: 'fake', model: 'ok', enabled: true }]
+  const runner = makeRunner({ chain, config: { attemptTimeoutMs: 350 } })
+  const run = await finished(runner, runner.start({ task: 'keep going', dir: os.tmpdir() }))
+  assert.equal(run.status, 'done')
+  assert.equal(run.model, 'chatty')
+  assert.equal(run.attempts.length, 1)
+  assert.equal(run.final, 'done chatty')
+  assert.equal(runner.cooldowns['fake:chatty'], undefined)
 })
 
 test('a single-piece plan runs as one agent (no fan-out)', async () => {

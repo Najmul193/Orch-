@@ -384,15 +384,17 @@ export class Runner extends EventEmitter {
       let stderr = ''
       let settled = false
       let timedOut = false
-      const timeoutMs = this.config.attemptTimeoutMs ?? 120_000
-      let timer = null
+      let timeoutReason = ''
+      const idleMs = this.config.attemptTimeoutMs ?? 120_000
+      const hardMs = this.config.maxAttemptMs ?? 30 * 60_000
+      let idleTimer = null, hardTimer = null
       const done = (code) => {
         if (settled) return
         settled = true
-        clearTimeout(timer)
+        clearTimeout(idleTimer); clearTimeout(hardTimer)
         run.child = null
         const ok = code === 0 && !errText && !timedOut
-        const error = timedOut ? `no response in ${Math.round(timeoutMs / 1000)}s`
+        const error = timedOut ? (timeoutReason === 'hard' ? `ran too long (over ${Math.round(hardMs / 60000)}m)` : `no output for ${Math.round(idleMs / 1000)}s`)
           : errText.trim() || stderr.trim().split('\n').at(-1) || `exit code ${code}`
         resolve({ ok, timeout: timedOut, limited: !ok && !timedOut && isLimitError(errText + stderr), error: ok ? '' : error.slice(0, 500) })
       }
@@ -407,14 +409,22 @@ export class Runner extends EventEmitter {
       }
       const child = spawn(def.cmd, def.argv(prompt, entry.model, run.dir), { cwd: run.dir, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
       run.child = child
-      // A model that never streams back must not hang the run forever: give it
-      // attemptTimeoutMs, then kill it so the next model in the chain takes over.
-      timer = setTimeout(() => {
-        timedOut = true
-        try { process.kill(-child.pid, 'SIGKILL') } catch { try { child.kill('SIGKILL') } catch {} }
-      }, timeoutMs)
+      const killChild = () => { try { process.kill(-child.pid, 'SIGKILL') } catch { try { child.kill('SIGKILL') } catch {} } }
+      // Kill a model only when it goes quiet: while it keeps streaming, let it run.
+      // A model paused on your permission prompt is not quiet — it is waiting on you.
+      const armIdle = () => {
+        clearTimeout(idleTimer)
+        idleTimer = setTimeout(() => {
+          if (settled) return
+          if (run.pending) return armIdle()
+          timedOut = true; timeoutReason = 'idle'; killChild()
+        }, idleMs)
+      }
+      hardTimer = setTimeout(() => { if (!settled) { timedOut = true; timeoutReason = 'hard'; killChild() } }, hardMs)
+      armIdle()
       const parse = def.parser()
       createInterface({ input: child.stdout }).on('line', (line) => {
+        armIdle()
         let obj
         try { obj = JSON.parse(line) } catch { return }
         for (const ev of parse(obj)) {
@@ -429,7 +439,7 @@ export class Runner extends EventEmitter {
           this.#event(run, ev)
         }
       })
-      child.stderr.on('data', (d) => { stderr = (stderr + d).slice(-4000) })
+      child.stderr.on('data', (d) => { armIdle(); stderr = (stderr + d).slice(-4000) })
       child.on('error', (err) => { errText += err.message; done(-1) })
       child.on('close', done)
     })

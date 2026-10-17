@@ -55,7 +55,8 @@
   "openOnPermission": true,
   "heartbeatMs": 5000,
   "plannerTimeoutMs": 25000,
-  "attemptTimeoutMs": 60000,
+  "attemptTimeoutMs": 120000,
+  "maxAttemptMs": 1800000,
   "plannerModel": "glm-5.3-flash-free",
   "permissions": {
     "mode": "ask",
