@@ -346,12 +346,14 @@ export class Runner extends EventEmitter {
       run.attempts.push({ agent: e.agent, model: e.model, session: run.session, ok: res.ok, error: res.error })
       if (run.status === 'killed') return
       if (res.ok) return this.#finish(run, 'done')
-      if (res.limited) {
-        // shortcut: fixed cooldown, ignores any reset time in the error; parse it once a real free-model limit message is captured
+      if (res.limited || res.timeout) {
+        // A rate limit or a hung model both mean "don't pick this one again soon".
+        // (Shortcut: fixed cooldown, ignores any reset time in the error.)
         this.cooldowns[key] = Date.now() + (this.config.cooldownMinutes ?? 15) * 60_000
         this.emit('cooldowns', this.cooldowns)
       }
-      this.#event(run, { kind: 'info', text: `${key} failed${res.limited ? ' (rate limited)' : ''}: ${res.error}. Trying next agent.` })
+      const why = res.timeout ? 'no response' : res.limited ? 'rate limited' : 'failed'
+      this.#event(run, { kind: 'info', text: `${key} ${why}: ${res.error}. Trying next agent.` })
       prompt = run.task + RETRY_NOTE
     }
     this.#finish(run, 'failed', run.attempts.length ? `all agents failed (last: ${run.attempts.at(-1).error})` : 'no agent available (all disabled or cooling down)')
@@ -381,13 +383,18 @@ export class Runner extends EventEmitter {
       let errText = ''
       let stderr = ''
       let settled = false
+      let timedOut = false
+      const timeoutMs = this.config.attemptTimeoutMs ?? 120_000
+      let timer = null
       const done = (code) => {
         if (settled) return
         settled = true
+        clearTimeout(timer)
         run.child = null
-        const ok = code === 0 && !errText
-        const error = errText.trim() || stderr.trim().split('\n').at(-1) || `exit code ${code}`
-        resolve({ ok, limited: !ok && isLimitError(errText + stderr), error: ok ? '' : error.slice(0, 500) })
+        const ok = code === 0 && !errText && !timedOut
+        const error = timedOut ? `no response in ${Math.round(timeoutMs / 1000)}s`
+          : errText.trim() || stderr.trim().split('\n').at(-1) || `exit code ${code}`
+        resolve({ ok, timeout: timedOut, limited: !ok && !timedOut && isLimitError(errText + stderr), error: ok ? '' : error.slice(0, 500) })
       }
       // detached: own process group, so kill() also stops the commands the agent started
       const env = { ...process.env, ...(def.env ? def.env(this.config) : {}) }
@@ -400,6 +407,12 @@ export class Runner extends EventEmitter {
       }
       const child = spawn(def.cmd, def.argv(prompt, entry.model, run.dir), { cwd: run.dir, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
       run.child = child
+      // A model that never streams back must not hang the run forever: give it
+      // attemptTimeoutMs, then kill it so the next model in the chain takes over.
+      timer = setTimeout(() => {
+        timedOut = true
+        try { process.kill(-child.pid, 'SIGKILL') } catch { try { child.kill('SIGKILL') } catch {} }
+      }, timeoutMs)
       const parse = def.parser()
       createInterface({ input: child.stdout }).on('line', (line) => {
         let obj

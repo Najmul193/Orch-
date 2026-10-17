@@ -96,6 +96,15 @@ test('fan-out splits a task and spreads the parts across different models', asyn
   assert.match(run.final, /### part b/)
 })
 
+test('a model that never responds times out and the chain moves on', async () => {
+  const chain = [{ agent: 'fake', model: 'slow', enabled: true }, { agent: 'fake', model: 'ok', enabled: true }]
+  const runner = makeRunner({ chain, config: { attemptTimeoutMs: 700 } })
+  const run = await finished(runner, runner.start({ task: 'hello there', dir: os.tmpdir() }))
+  assert.equal(run.status, 'done')
+  assert.equal(run.model, 'ok')
+  assert.match(run.attempts[0].error, /no response/)
+})
+
 test('a single-piece plan runs as one agent (no fan-out)', async () => {
   const planner = { route: () => ({ tag: 'research', complex: true, pick: { agent: 'fake', model: 'ok' }, order: [], local: false }), split: async () => [{ title: 'only', prompt: 'do the whole thing' }] }
   const runner = makeRunner({ chain: [{ agent: 'fake', model: 'ok', enabled: true }], config: { fanout: true }, planner })
