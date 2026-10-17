@@ -96,6 +96,21 @@ test('fan-out splits a task and spreads the parts across different models', asyn
   assert.match(run.final, /### part b/)
 })
 
+test('a research task is split from the template, without waiting on the planner model', async () => {
+  let called = false
+  const planner = {
+    route: () => ({ tag: 'research', complex: true, pick: { agent: 'fake', model: 'ok' }, order: [], local: false }),
+    split: async () => { called = true; return [] },
+    fallbackSplit,
+  }
+  const runner = makeRunner({ chain: [{ agent: 'fake', model: 'ok', enabled: true }], config: { fanout: true }, planner })
+  const run = await finished(runner, runner.start({ task: 'research the state of the electric vehicle market in Bangladesh 2024 2025', dir: os.tmpdir() }))
+  assert.equal(run.status, 'done')
+  assert.equal(called, false) // the slow planner model was never consulted
+  assert.equal(run.children.length, 3)
+  assert.match(run.final, /### Facts & figures/)
+})
+
 test('a model that never responds times out and the chain moves on', async () => {
   const chain = [{ agent: 'fake', model: 'slow', enabled: true }, { agent: 'fake', model: 'ok', enabled: true }]
   const runner = makeRunner({ chain, config: { attemptTimeoutMs: 700 } })

@@ -5,7 +5,7 @@ import { createInterface } from 'node:readline'
 import fs from 'node:fs'
 import path from 'node:path'
 import { agents, isLimitError } from './agents.mjs'
-import { route, split } from './planner.mjs'
+import { route, split, fallbackSplit } from './planner.mjs'
 import { classify } from './classify.mjs'
 
 const RETRY_NOTE = '\n\nNote: a previous attempt at this task may have left partial changes. Check `git status`/`git diff` first and continue from there.'
@@ -48,7 +48,7 @@ export function planEntries(chain, { agent, model } = {}) {
 }
 
 export class Runner extends EventEmitter {
-  constructor(config, dataDir, agentDefs = agents, planner = { route, split }) {
+  constructor(config, dataDir, agentDefs = agents, planner = { route, split, fallbackSplit }) {
     super()
     this.config = config
     this.agents = agentDefs
@@ -127,9 +127,15 @@ export class Runner extends EventEmitter {
     run.phase = 'planning'
     this.#changed(run)
     this.#event(run, { kind: 'info', text: 'planning: can this fan out to several agents?' })
-    let subtasks = []
-    try { subtasks = await this.planner.split(run.task, { model: this.config.plannerModel, dir: run.dir, config: this.config }) } catch { /* planner unavailable */ }
-    if (this.planner.fallbackSplit && subtasks.length < 2) subtasks = this.planner.fallbackSplit(run.task, run.plan?.tag)
+    const tag = run.plan?.tag
+    // Research and data tasks are always multi-angle, so split them from a fixed
+    // template and start right away — no waiting on a planner model. Only fall back
+    // to asking a model when the deterministic split can't break the task up.
+    let subtasks = this.planner.fallbackSplit?.(run.task, tag) ?? []
+    if (subtasks.length < 2) {
+      try { subtasks = await this.planner.split(run.task, { model: this.config.plannerModel, dir: run.dir, config: this.config }) } catch { /* planner unavailable */ }
+    }
+    if (subtasks.length < 2) subtasks = this.planner.fallbackSplit?.(run.task, tag) ?? []
     if (run.status === 'killed') return
     if (subtasks.length < 2) {
       run.status = 'queued'
