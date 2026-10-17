@@ -77,3 +77,8 @@ export const agents = {
 
 export const isLimitError = (text) =>
   /\b429\b|rate.?limit|quota|usage limit|too many requests|resource.?exhausted|hit your .*limit/i.test(text)
+
+// The provider itself is briefly down or overloaded (not our fault, and not a rate
+// limit): worth another model, and worth benching this one for a short while.
+export const isTransientError = (text) =>
+  /\b5\d\d\b|server_error|upstream error|streaming response failed|temporarily overloaded|overloaded|service unavailable|bad gateway|gateway time-?out/i.test(text)

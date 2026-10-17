@@ -8,6 +8,10 @@ if (mode === 'broken') {
   console.log(JSON.stringify({ error: 'model crashed' }))
   process.exit(1)
 }
+if (mode === 'overloaded') {
+  console.log(JSON.stringify({ error: 'Streaming response failed: [503] Upstream error from Nvidia: Service temporarily overloaded' }))
+  process.exit(1)
+}
 if (mode === 'toolerr') {
   console.log(JSON.stringify({ warn: 'webfetch failed: StatusCode: non 2xx status code (403 GET https://example.com/x)' }))
   setTimeout(() => { console.log(JSON.stringify({ text: 'done toolerr' })); process.exit(0) }, 150)

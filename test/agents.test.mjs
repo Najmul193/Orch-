@@ -1,7 +1,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import fs from 'node:fs'
-import { agents, isLimitError } from '../src/agents.mjs'
+import { agents, isLimitError, isTransientError } from '../src/agents.mjs'
 
 const parseFixture = (agent, file) => {
   const parse = agents[agent].parser()
@@ -57,4 +57,14 @@ test('isLimitError', () => {
     assert.ok(isLimitError(s), s)
   }
   for (const s of ['model crashed', 'invalid model selection', 'exit code 1']) assert.ok(!isLimitError(s), s)
+})
+
+test('isTransientError spots provider outages, not real failures', () => {
+  for (const s of [
+    'Streaming response failed: [503] Upstream error from Nvidia: Service temporarily overloaded',
+    '{"message":"...","type":"server_error"}',
+    'HTTP 502 Bad Gateway',
+    '503 Service Unavailable',
+  ]) assert.ok(isTransientError(s), s)
+  for (const s of ['model crashed', 'HTTP 429 rate limit', 'invalid model selection', 'exit code 1']) assert.ok(!isTransientError(s), s)
 })

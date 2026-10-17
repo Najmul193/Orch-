@@ -4,7 +4,7 @@ import { randomBytes } from 'node:crypto'
 import { createInterface } from 'node:readline'
 import fs from 'node:fs'
 import path from 'node:path'
-import { agents, isLimitError } from './agents.mjs'
+import { agents, isLimitError, isTransientError } from './agents.mjs'
 import { route, split, fallbackSplit } from './planner.mjs'
 import { classify } from './classify.mjs'
 
@@ -352,13 +352,19 @@ export class Runner extends EventEmitter {
       run.attempts.push({ agent: e.agent, model: e.model, session: run.session, ok: res.ok, error: res.error })
       if (run.status === 'killed') return
       if (res.ok) return this.#finish(run, 'done')
+      const transient = !res.limited && !res.timeout && isTransientError(res.error)
       if (res.limited || res.timeout) {
         // A rate limit or a hung model both mean "don't pick this one again soon".
         // (Shortcut: fixed cooldown, ignores any reset time in the error.)
         this.cooldowns[key] = Date.now() + (this.config.cooldownMinutes ?? 15) * 60_000
         this.emit('cooldowns', this.cooldowns)
+      } else if (transient) {
+        // The provider itself is briefly overloaded (503 etc). Bench this model for a
+        // short while so the other parallel subtasks stop piling onto the same one.
+        const until = Date.now() + (this.config.transientCooldownMs ?? 120_000)
+        if ((this.cooldowns[key] ?? 0) < until) { this.cooldowns[key] = until; this.emit('cooldowns', this.cooldowns) }
       }
-      const why = res.timeout ? 'no response' : res.limited ? 'rate limited' : 'failed'
+      const why = res.timeout ? 'no response' : res.limited ? 'rate limited' : transient ? 'provider overloaded' : 'failed'
       this.#event(run, { kind: 'info', text: `${key} ${why}: ${res.error}. Trying next agent.` })
       prompt = run.task + RETRY_NOTE
     }

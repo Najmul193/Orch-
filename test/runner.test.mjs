@@ -46,6 +46,15 @@ test('a non-limit failure falls through without a cooldown and tells the next ag
   assert.equal(runner.cooldowns['fake:broken'], undefined)
 })
 
+test('a provider-overloaded error benches the model briefly and moves on', async () => {
+  const runner = makeRunner([{ agent: 'fake', model: 'overloaded' }, { agent: 'fake', model: 'ok' }])
+  const run = await finished(runner, runner.start({ task: 't', dir: os.tmpdir() }))
+  assert.equal(run.status, 'done')
+  assert.equal(run.model, 'ok')
+  const cool = runner.cooldowns['fake:overloaded'] - Date.now()
+  assert.ok(cool > 0 && cool <= 2 * 60_000 + 5000, `expected a short bench, got ${cool}ms`)
+})
+
 test('all entries failing marks the run failed; disabled entries are skipped', async () => {
   const runner = makeRunner([{ agent: 'fake', model: 'ok', enabled: false }, { agent: 'fake', model: 'broken' }])
   const run = await finished(runner, runner.start({ task: 't', dir: os.tmpdir() }))

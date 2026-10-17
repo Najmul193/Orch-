@@ -303,7 +303,7 @@ function renderAgents() {
         h('input', { type: 'checkbox', checked: e.enabled !== false, title: 'enabled', onchange: (ev) => { e.enabled = ev.target.checked; saveChains() } }),
         h('span', { class: 'grow', title: key }, h('b', {}, e.agent), ' ', short(e.model)),
         busy ? h('span', { class: 'pill s-running' }, `${busy} running`) : null,
-        cool > Date.now() ? h('span', { class: 'pill s-cool' }, `cooling ${dur(Date.now(), cool)}`) : null,
+        cool > Date.now() && !busy ? h('span', { class: 'pill s-cool' }, `cooling ${dur(Date.now(), cool)}`) : null,
         h('button', { title: 'move up', onclick: () => move(-1) }, '↑'),
         h('button', { title: 'move down', onclick: () => move(1) }, '↓'),
         h('button', { class: 'danger', title: 'remove', onclick: () => { chain.splice(i, 1); saveChains() } }, '✕')))
@@ -602,7 +602,7 @@ function renderFlow() {
     const cool = state.cooldowns[a.key] > now
     const out = flow.outcome.get(a.key)
     const st = run ? 'running' : cool ? 'cooling' : a.local ? 'local' : a.enabled ? 'idle' : 'disabled'
-    busy += !!run; cooling += cool
+    busy += !!run; cooling += cool && !run
     const t3 = run ? flow.activity.get(a.key) || 'working…'
       : out && now - out.t < 8000 ? out.text
       : cool ? `cooling · ${dur(now, state.cooldowns[a.key])} left` : a.local ? 'ready for simple tasks' : a.enabled ? 'idle · ready' : 'disabled'
