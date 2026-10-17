@@ -6,7 +6,7 @@ import path from 'node:path'
 import { once } from 'node:events'
 import { Runner } from '../src/runner.mjs'
 import { classify } from '../src/classify.mjs'
-import { route, isLocalFriendly } from '../src/planner.mjs'
+import { route, isLocalFriendly, isComplex, fallbackSplit } from '../src/planner.mjs'
 import { rankFree, buildChain } from '../src/pool.mjs'
 import { agents } from '../src/agents.mjs'
 
@@ -49,6 +49,26 @@ test('route sends simple non-file work to the local model when enabled', () => {
   assert.equal(r.local, true)
   assert.equal(isLocalFriendly('fix the bug in src/app.js', 'code'), false)
   assert.equal(route('write a script to rename files', config, { free: ['opencode/x-free'] }).local, false)
+  // short greetings stay local; research work never does
+  assert.equal(isLocalFriendly('hi', 'general'), true)
+  assert.equal(route('hi', config, { free: ['opencode/x-free'] }).local, true)
+  assert.equal(route('research about the stock market today', config, { free: ['opencode/x-free'] }).local, false)
+})
+
+test('isComplex flags big, multi-part and research tasks', () => {
+  assert.equal(isComplex('hi', 'general'), false)
+  assert.equal(isComplex('fix the bug in src/app.js', 'code'), false)
+  assert.equal(isComplex('research about the stock market today', 'research'), true)
+  assert.equal(isComplex('1. do a\n2. do b\n3. do c', 'general'), true)
+  assert.equal(isComplex('x'.repeat(300), 'docs'), true)
+})
+
+test('fallbackSplit makes independent parts for a complex research task', () => {
+  const parts = fallbackSplit('research about the stock market today', 'research')
+  assert.equal(parts.length, 3)
+  assert.ok(parts.every((p) => p.title && p.prompt.includes('stock market')))
+  assert.deepEqual(fallbackSplit('hi', 'general'), [])
+  assert.deepEqual(fallbackSplit('fix the bug in src/app.js', 'code'), [])
 })
 
 test('rankFree and buildChain order free models then agy fallback', () => {
@@ -61,27 +81,35 @@ test('rankFree and buildChain order free models then agy fallback', () => {
   ])
 })
 
-test('fan-out splits a task and merges the children', async () => {
+test('fan-out splits a task and spreads the parts across different models', async () => {
   const planner = {
-    route: () => ({ tag: 'general', pick: null, order: [], local: false }),
+    route: () => ({ tag: 'research', complex: true, pick: { agent: 'fake', model: 'a' }, order: [], local: false }),
     split: async () => [{ title: 'part a', prompt: 'do part a now' }, { title: 'part b', prompt: 'do part b now' }],
   }
-  const runner = makeRunner({ chain: [{ agent: 'fake', model: 'ok' }], config: { fanout: true }, planner })
-  const run = await finished(runner, runner.start({ task: 'two independent things', dir: os.tmpdir() }))
+  const chain = [{ agent: 'fake', model: 'a', enabled: true }, { agent: 'fake', model: 'b', enabled: true }]
+  const runner = makeRunner({ chain, config: { fanout: true }, planner })
+  const run = await finished(runner, runner.start({ task: 'research two independent things', dir: os.tmpdir() }))
   assert.equal(run.status, 'done')
   assert.equal(run.children.length, 2)
+  assert.deepEqual(run.children.map((id) => runner.runs.get(id).model).sort(), ['a', 'b'])
   assert.match(run.final, /### part a/)
   assert.match(run.final, /### part b/)
-  assert.match(run.final, /done by ok/)
 })
 
 test('a single-piece plan runs as one agent (no fan-out)', async () => {
-  const planner = { route: () => ({ tag: 'general', pick: null, order: [], local: false }), split: async () => [{ title: 'only', prompt: 'do the whole thing' }] }
-  const runner = makeRunner({ chain: [{ agent: 'fake', model: 'ok' }], config: { fanout: true }, planner })
-  const run = await finished(runner, runner.start({ task: 'one connected task', dir: os.tmpdir() }))
+  const planner = { route: () => ({ tag: 'research', complex: true, pick: { agent: 'fake', model: 'ok' }, order: [], local: false }), split: async () => [{ title: 'only', prompt: 'do the whole thing' }] }
+  const runner = makeRunner({ chain: [{ agent: 'fake', model: 'ok', enabled: true }], config: { fanout: true }, planner })
+  const run = await finished(runner, runner.start({ task: 'one connected thing', dir: os.tmpdir() }))
   assert.equal(run.status, 'done')
   assert.equal(run.children.length, 0)
-  assert.equal(run.final, 'done by ok')
+})
+
+test('a simple task skips fan-out even when fanout is on', async () => {
+  const planner = { route: () => ({ tag: 'general', complex: false, pick: null, order: [], local: true }), split: async () => { throw new Error('should not split') } }
+  const runner = makeRunner({ chain: [{ agent: 'fake', model: 'ok', enabled: true }], config: { fanout: true }, planner })
+  const run = await finished(runner, runner.start({ task: 'hi', dir: os.tmpdir() }))
+  assert.equal(run.children.length, 0)
+  assert.equal(run.status, 'done')
 })
 
 test('local agent parser reads the shim output', () => {

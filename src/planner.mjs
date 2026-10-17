@@ -8,24 +8,53 @@ import { rankFree } from './pool.mjs'
 // self-contained, non-file work; otherwise the best free model for the tag.
 // Pure and sync: no I/O, never throws. Returns { tag, pick, order, local }.
 const FILE_WORK = /\b(file|files|folder|directory|path|repo|repository|code|script|bug|fix|edit|write|create|delete|rename|refactor|implement|install|run|command|commit|git|test|api|server|css|html|component|function|class|database|query|build|deploy|config)\b/i
+const DEEP = /\b(research|investigate|compare|comparison|analy[sz]e|evaluate|survey|benchmark|break down|step[- ]by[- ]step|multiple|several|each|pros and cons|report|strategy|roadmap|plan out|in depth|detailed|comprehensive|overview|then|also)\b/i
 
+// Only short, self-contained, non-file work belongs on the local model.
 export function isLocalFriendly(task, tag) {
   const text = String(task)
-  if (text.length > 600) return false
+  if (text.length > 240) return false
   if (FILE_WORK.test(text)) return false
-  return tag === 'docs' || tag === 'research' || tag === 'general'
+  if (tag === 'research' || tag === 'data') return false // these get split and distributed
+  if (isComplex(task, tag)) return false
+  return tag === 'docs' || tag === 'general'
+}
+
+// Is this task big enough to be worth splitting across several agents at once?
+export function isComplex(task, tag) {
+  const t = String(task)
+  if (t.length > 280) return true
+  if (/(^|\n)\s*(\d+[.)]|[-*])\s+\S/.test(t)) return true // a list of items asked for at once
+  if (tag === 'research' || tag === 'data') return t.length > 25
+  if (DEEP.test(t) && t.length > 70) return true
+  if ((t.match(/\band\b/gi) || []).length >= 2 && t.length > 120) return true
+  return false
 }
 
 export function route(task, config = {}, pool = {}) {
   const { tag } = classify(task)
+  const complex = isComplex(task, tag)
   const local = config.local
   if (local?.enabled && local.model && isLocalFriendly(task, tag)) {
-    return { tag, pick: { agent: 'local', model: local.model }, order: [], local: true }
+    return { tag, complex: false, pick: { agent: 'local', model: local.model }, order: [], local: true }
   }
   const routing = config.routing || {}
   const wanted = routing[tag] || routing.general || []
   const order = rankFree(pool.free || [], wanted)
-  return { tag, pick: order[0] ? { agent: 'opencode', model: order[0] } : null, order, local: false }
+  return { tag, complex, pick: order[0] ? { agent: 'opencode', model: order[0] } : null, order, local: false }
+}
+
+// When the planner model is unavailable but the task is clearly big, split it into
+// a few independent angles anyway so the work still runs in parallel.
+export function fallbackSplit(task, tag) {
+  if (!['research', 'data', 'general'].includes(tag)) return []
+  if (!isComplex(task, tag)) return []
+  const t = String(task).trim()
+  return [
+    { title: 'Facts & figures', prompt: `Collect the latest concrete facts, numbers and named sources about this task. Be specific and cite where each fact comes from. Task: ${t}` },
+    { title: 'Drivers, risks & views', prompt: `Lay out the key drivers, risks and competing viewpoints for this task. Give the strongest argument on each side. Task: ${t}` },
+    { title: 'Implications & next steps', prompt: `Explain the practical implications and what to watch or do next for this task. Task: ${t}` },
+  ]
 }
 
 // Ask a model to break a task into independent pieces so several agents can work at

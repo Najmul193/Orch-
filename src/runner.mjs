@@ -14,6 +14,30 @@ const FINISHED = new Set(['done', 'failed', 'killed'])
 const FILE_TAGS = new Set(['code', 'ui', 'data'])
 // Commands that hit the filesystem, the network, or the machine hard: pause and ask first.
 const RISKY = /\brm\s+-rf\b|\bsudo\b|\bgit\s+push\b|\bgit\s+reset\s+--hard\b|\bgit\s+clean\s+-[a-z]*f|\bchmod\s+-R\b|\bchown\b|\bdd\s+if=|\bmkfs\b|\bdiskutil\b|\bshutdown\b|\breboot\b|\bkillall\b|npm\s+publish|\bcurl\b[^\n|]*\|\s*(?:ba|z|fi)?sh|\bwget\b[^\n|]*\|\s*(?:ba|z|fi)?sh/i
+const HOME = process.env.HOME || ''
+const NAMED_DIRS = { desktop: 'Desktop', documents: 'Documents', downloads: 'Downloads', movies: 'Movies', music: 'Music', pictures: 'Pictures', 'dropbox': 'Dropbox' }
+// Folders a task wants an agent to reach outside its working directory. A headless
+// agent can't ask us itself (it just denies), so we detect these first and ask the
+// user once, then hand the agent access to exactly those folders.
+function extPaths(task, base) {
+  const out = new Set()
+  const add = (raw) => {
+    if (!raw) return
+    const abs = raw.startsWith('~/') ? path.join(HOME, raw.slice(2)) : raw
+    if (!path.isAbsolute(abs)) return
+    const dir = /\.[a-z0-9]{1,6}$/i.test(abs) ? path.dirname(abs) : abs
+    const segs = dir.split(path.sep).filter(Boolean).length
+    const underHome = HOME && dir.startsWith(HOME + path.sep)
+    if (!underHome && segs < 2) return // ignore noise like "/or"
+    if (dir === base || dir.startsWith(base + path.sep) || base.startsWith(dir + path.sep)) return // already inside the project
+    out.add(dir)
+  }
+  for (const m of task.matchAll(/(?:~|\/)[^\s'"]{2,}/g)) add(m[0].replace(/[.,;:)\]]+$/, ''))
+  for (const [word, name] of Object.entries(NAMED_DIRS)) {
+    if (HOME && new RegExp(`\\b${word}\\b`, 'i').test(task)) add(path.join(HOME, name))
+  }
+  return [...out]
+}
 
 // Order of entries to try: an explicit model first, then the rest of the chain.
 export function planEntries(chain, { agent, model } = {}) {
@@ -59,12 +83,11 @@ export class Runner extends EventEmitter {
       const r = this.planner.route(task, this.config, this.pool)
       if (r.pick) {
         run.want = { ...r.pick }
-        run.plan = { tag: r.tag, agent: r.pick.agent, model: r.pick.model, local: r.local }
-        this.#event(run, { kind: 'info', text: `routed ${r.tag} -> ${r.local ? 'local ' : ''}${r.pick.model}` })
+        run.plan = { tag: r.tag, complex: r.complex, agent: r.pick.agent, model: r.pick.model, local: r.local }
       }
     }
     this.#changed(run)
-    if (this.config.fanout === true) this.#fan(run)
+    if (this.#shouldFan(run)) this.#fan(run)
     else this.#enqueue(run)
     return run
   }
@@ -73,6 +96,25 @@ export class Runner extends EventEmitter {
     this.queue.push(run)
     this.#changed(run)
     this.#pump()
+  }
+
+  // Only fan out when the task is big enough to be worth several agents at once;
+  // simple or local-routed tasks stay a single call.
+  #shouldFan(run) {
+    if (this.config.fanout === false) return false
+    const p = run.plan
+    if (!p || p.local) return false // a pinned model, or answered by the local model
+    return p.complex === true || p.tag === 'research' || p.tag === 'data'
+  }
+
+  // Choose a different model for each subtask (round-robin over the live chain) so
+  // the parts really run on several models at once instead of all hitting one.
+  #spread(run, n) {
+    const now = Date.now()
+    const chain = planEntries(this.config.chains[run.chain] ?? [], {})
+    const live = chain.filter((e) => (this.cooldowns[`${e.agent}:${e.model}`] ?? 0) <= now)
+    const pool = live.length ? live : chain
+    return Array.from({ length: n }, (_, i) => (pool.length ? pool[i % pool.length] : run.want))
   }
 
   // Planning step: try to break the task into independent pieces that several
@@ -84,6 +126,7 @@ export class Runner extends EventEmitter {
     this.#event(run, { kind: 'info', text: 'planning: can this fan out to several agents?' })
     let subtasks = []
     try { subtasks = await this.planner.split(run.task, { model: this.config.plannerModel, dir: run.dir, config: this.config }) } catch { /* planner unavailable */ }
+    if (this.planner.fallbackSplit && subtasks.length < 2) subtasks = this.planner.fallbackSplit(run.task, run.plan?.tag)
     if (run.status === 'killed') return
     if (subtasks.length < 2) {
       run.status = 'queued'
@@ -95,23 +138,24 @@ export class Runner extends EventEmitter {
     run.status = 'running'
     run.startedAt = Date.now()
     run.phase = 'fanout'
-    run.plan = { ...(run.plan || {}), subtasks: subtasks.map((s) => s.title) }
-    this.#event(run, { kind: 'info', text: `fan-out: ${subtasks.length} parallel subtasks` })
+    const picks = this.#spread(run, subtasks.length)
+    run.plan = { ...(run.plan || {}), subtasks: subtasks.map((s) => s.title), assign: picks.map((e) => `${e?.agent}·${String(e?.model ?? '').replace(/^opencode\//, '')}`) }
+    this.#event(run, { kind: 'info', text: `fan-out: ${subtasks.length} subtasks across ${new Set(picks.map((e) => e?.model)).size} models` })
     this.#changed(run)
-    run.children = subtasks.map((s) => this.#child(run, s))
+    run.children = subtasks.map((s, i) => this.#child(run, s, picks[i]))
     for (const cid of run.children) this.queue.push(this.runs.get(cid))
     this.#changed(run)
     this.#pump()
   }
 
-  #child(run, sub) {
+  #child(run, sub, entry) {
     const id = `${Date.now()}-${randomBytes(2).toString('hex')}`
     const child = {
       id, task: sub.prompt, dir: run.dir, chain: run.chain, source: run.source,
       agent: null, model: null, session: null, title: sub.title,
       status: 'queued', phase: '', final: '', error: '', attempts: [],
       createdAt: Date.now(), startedAt: null, endedAt: null,
-      want: { ...run.want }, plan: null, parentId: run.id, children: [],
+      want: entry ? { ...entry } : { ...run.want }, plan: run.plan ? { tag: run.plan.tag } : null, parentId: run.id, children: [],
     }
     this.runs.set(id, child)
     this.#write(child, { type: 'run', ...this.public(child), task: child.task })
@@ -163,16 +207,30 @@ export class Runner extends EventEmitter {
     if (!perms || perms.mode === 'off' || run.plan?.local) return true
     const tag = run.plan?.tag || classify(run.task).tag
     run.plan = { ...(run.plan || {}), tag }
-    if (!FILE_TAGS.has(tag) || perms.trusted.includes(run.dir)) return true
-    // A prompt for this same folder may already be open (fan-out): share one answer.
-    const shared = [...this.permissions.values()].find((p) => p.rememberKey === run.dir)
-    if (shared) {
-      run.status = 'waiting'
-      run.permission = shared.run.permission
-      this.#changed(run)
-      return (await shared.promise).allow
+    // 1. Folders the agent would edit files / run commands in (code / ui / data work).
+    if (FILE_TAGS.has(tag) && !perms.trusted.includes(run.dir)) {
+      // A prompt for this same folder may already be open (fan-out): share one answer.
+      const shared = [...this.permissions.values()].find((p) => p.rememberKey === run.dir)
+      if (shared) {
+        run.status = 'waiting'
+        run.permission = shared.run.permission
+        this.#changed(run)
+        if (!(await shared.promise).allow) return false
+      } else {
+        const { allow } = await this.#ask(run, { kind: 'folder', what: 'Let an agent edit files and run commands here?', detail: run.dir, remember: run.dir })
+        if (!allow) return false
+      }
     }
-    return (await this.#ask(run, { kind: 'folder', what: 'Let an agent edit files and run commands here?', detail: run.dir, remember: run.dir })).allow
+    // 2. Files outside the working directory (e.g. ~/Desktop): ask once, then grant
+    //    the agent access to exactly those folders so its read tool works.
+    const grants = extPaths(run.task, run.dir)
+    run.grants = grants
+    const need = grants.filter((d) => !perms.trusted.includes(d))
+    if (need.length) {
+      const { allow } = await this.#ask(run, { kind: 'file', what: 'Let the agent read files outside the project?', detail: need.join('\n'), remember: need })
+      if (!allow) return false
+    }
+    return true
   }
 
   // Park the run and hand the dashboard a request it can answer from the diagram.
@@ -195,9 +253,10 @@ export class Runner extends EventEmitter {
     this.permissions.delete(id)
     const { run } = p
     run.permission = null
-    if (allow && remember && p.rememberKey && !this.config.permissions.trusted.includes(p.rememberKey)) {
-      this.config.permissions.trusted.push(p.rememberKey)
-      this.emit('config')
+    if (allow && remember && p.rememberKey) {
+      const keys = Array.isArray(p.rememberKey) ? p.rememberKey : [p.rememberKey]
+      const fresh = keys.filter((k) => k && !this.config.permissions.trusted.includes(k))
+      if (fresh.length) { this.config.permissions.trusted.push(...fresh); this.emit('config') }
     }
     this.#event(run, { kind: 'info', text: allow ? 'permission granted' : 'permission denied' })
     if (allow && !FINISHED.has(run.status)) { run.status = 'running'; this.#changed(run) }
@@ -297,7 +356,14 @@ export class Runner extends EventEmitter {
         resolve({ ok, limited: !ok && isLimitError(errText + stderr), error: ok ? '' : error.slice(0, 500) })
       }
       // detached: own process group, so kill() also stops the commands the agent started
-      const env = def.env ? { ...process.env, ...def.env(this.config) } : process.env
+      const env = { ...process.env, ...(def.env ? def.env(this.config) : {}) }
+      // Headless opencode denies reads outside its working dir; hand it just the
+      // folders the user approved so its read tool works there.
+      if (entry.agent === 'opencode' && run.grants?.length) {
+        const external_directory = {}
+        for (const d of run.grants) { external_directory[d] = 'allow'; external_directory[d + '/**'] = 'allow' }
+        env.OPENCODE_CONFIG_CONTENT = JSON.stringify({ $schema: 'https://opencode.ai/config.json', permission: { external_directory } })
+      }
       const child = spawn(def.cmd, def.argv(prompt, entry.model, run.dir), { cwd: run.dir, env, detached: true, stdio: ['ignore', 'pipe', 'pipe'] })
       run.child = child
       const parse = def.parser()

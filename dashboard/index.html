@@ -345,6 +345,7 @@ function renderDetail() {
     r.attempts?.length > 1 ? h('div', { class: 'muted' }, 'Attempts: ', r.attempts.map((a) => `${short(a.model)} ${a.ok ? '✓' : '✗'}`).join(' → ')) : null,
     r.resume ? h('div', {}, h('h3', {}, 'Keep talking to this agent'), h('pre', {}, r.resume)) : null,
     detail?.task ? h('details', { open: taskOpen, ontoggle: (e) => { taskOpen = e.target.open } }, h('summary', { class: 'muted' }, 'Task sent to the agent'), h('pre', { style: 'white-space:pre-wrap' }, detail.task)) : null,
+    r.status === 'done' && r.final ? h('div', {}, h('h3', {}, (r.children || []).length ? 'Result (merged from all agents)' : 'Result'), h('pre', { style: 'white-space:pre-wrap' }, r.final)) : null,
     h('h3', {}, 'Live activity'), (() => {
       const el = h('div', { class: 'feed' }, feed.length ? feed.map((e) => h('div', { class: `k-${e.kind}` },
         e.kind === 'tool' ? `▸ ${e.text}` : e.kind === 'done' ? '✓ finished' : e.kind === 'error' ? `✗ ${e.text}` : e.kind === 'info' ? `· ${e.text}` : e.text)) : h('div', { class: 'k-info' }, 'waiting for output…'))
@@ -490,27 +491,23 @@ function layoutFlow() {
   flow.nodes = {}; flow.edges = {}; flow.particles = []
   const edges = s('g'), nodes = s('g')
   flow.layer = s('g')
-  nodes.append(fnode('dash', SRCX, cy - SRCH / 2, SRCW, SRCH))
-  edges.append(fedge('dash', [SRCX + SRCW, cy], [hx - hr, cy]))
-  // The local model sits on its own at the top; the free/pool models fill the rest below.
-  const pad = 20, LH = 66, LGAP = 10, localGap = 22
   const locals = list.filter((a) => a.local)
   const rest = list.filter((a) => !a.local)
-  const localArea = locals.length ? locals.length * LH + (locals.length - 1) * LGAP + localGap : 0
-  const restStep = rest.length ? (H - pad * 2 - localArea) / rest.length : 0
-  const restH = Math.max(56, Math.min(84, restStep - 8))
+  nodes.append(fnode('dash', SRCX, cy - SRCH / 2, SRCW, SRCH))
+  edges.append(fedge('dash', [SRCX + SRCW, cy], [hx - hr, cy]))
+  // The local model lives on its own, on the left under "You" — never mixed with the pool.
+  const LH = 74, LGAP = 12, localTop = cy + SRCH / 2 + 30
   locals.forEach((a, i) => {
-    const y = pad + i * (LH + LGAP)
-    nodes.append(fnode(a.key, AX, y, AW, LH))
-    edges.append(fedge(a.key, [hx + hr, cy], [AX, y + LH / 2]))
+    const y = localTop + i * (LH + LGAP)
+    nodes.append(fnode(a.key, SRCX, y, SRCW, LH))
+    edges.append(fedge(a.key, [SRCX + SRCW, y + LH / 2], [hx - hr, cy + 26]))
+    nodes.append(s('text', { class: 'fseplabel', x: SRCX, y: y - 7 }, 'local model · this machine'))
   })
-  if (locals.length) {
-    const dy = pad + localArea - localGap / 2
-    nodes.append(s('line', { class: 'fsep', x1: AX - 12, y1: dy, x2: AX + AW, y2: dy }))
-    nodes.append(s('text', { class: 'fseplabel', x: AX + AW, y: dy - 7, 'text-anchor': 'end' }, 'local model'))
-  }
+  // The free/pool models fill the whole right column.
+  const pad = 20, step = rest.length ? (H - pad * 2) / rest.length : 0
+  const restH = Math.max(56, Math.min(84, step - 8))
   rest.forEach((a, i) => {
-    const y = pad + localArea + i * restStep + (restStep - restH) / 2
+    const y = pad + i * step + (step - restH) / 2
     nodes.append(fnode(a.key, AX, y, AW, restH))
     edges.append(fedge(a.key, [hx + hr, cy], [AX, y + restH / 2]))
   })
@@ -663,10 +660,10 @@ function renderPlans() {
     const live = ['running', 'planning', 'queued'].includes(r.status)
     const collapsed = !live
     const subs = h('div', { class: 'subs', style: `max-height:${collapsed ? 0 : kids.length * 24 + 8}px` },
-      ...kids.map((k) => h('div', { class: `sub ${k.status}` },
+      ...kids.map((k, i) => h('div', { class: `sub ${k.status}` },
         h('span', { class: 'bar' }),
         h('span', { class: 'grow', title: k.title }, k.title),
-        h('span', { class: 'muted' }, k.agent ? short(k.model) : k.status))))
+        h('span', { class: 'muted' }, k.agent ? short(k.model) : (r.plan?.assign?.[i] || k.status)))))
     return h('div', { class: `plan${live ? ' live' : ''}` },
       h('div', { class: 'ptop' },
         h('span', { class: `pill s-${r.status}` }, r.status),

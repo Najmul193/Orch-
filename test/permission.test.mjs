@@ -73,6 +73,19 @@ test('permissions mode "off" skips the folder prompt', async () => {
   assert.equal(run.status, 'done')
 })
 
+test('reading a file outside the project asks first, then grants that folder', async () => {
+  const runner = makeRunner({ chain: [{ agent: 'fake', model: 'ok', enabled: true }], config: { permissions: { mode: 'ask', trusted: [] } } })
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orch-perm-'))
+  const run = runner.start({ task: 'summarize what is on my desktop', dir })
+  assert.equal(run.status, 'waiting')
+  assert.equal(run.permission.kind, 'file')
+  assert.match(run.permission.detail, /Desktop/)
+  runner.resolvePermission(run.permission.id, true, true)
+  await finished(runner, run)
+  assert.equal(run.status, 'done')
+  assert.ok(runner.config.permissions.trusted.some((d) => d.endsWith('Desktop')))
+})
+
 test('a risky command pauses a running agent for approval', async () => {
   const runner = makeRunner({ chain: [{ agent: 'fake', model: 'risky', enabled: true }], config: { permissions: { mode: 'ask', trusted: [] } } })
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orch-perm-'))
