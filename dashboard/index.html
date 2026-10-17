@@ -128,6 +128,8 @@
   @keyframes spin { to { transform: rotate(360deg); } }
   .hub .hubt { font: 800 20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: var(--text); }
   .hub .hubs { font: 11.5px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: var(--muted); }
+  .fsep { stroke: var(--line-strong); stroke-dasharray: 3 5; }
+  .fseplabel { font: 10.5px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: var(--muted); text-transform: uppercase; letter-spacing: .1em; }
   .particle { filter: url(#glow); }
   .p-task { fill: var(--a1); } .p-ok { fill: var(--ok); } .p-bad { fill: var(--bad); } .p-local { fill: var(--ok); }
 
@@ -490,12 +492,27 @@ function layoutFlow() {
   flow.layer = s('g')
   nodes.append(fnode('dash', SRCX, cy - SRCH / 2, SRCW, SRCH))
   edges.append(fedge('dash', [SRCX + SRCW, cy], [hx - hr, cy]))
-  const AH = Math.max(58, Math.min(84, (H - 40) / Math.max(list.length, 1) - 10))
-  const step = list.length ? (H - 40) / list.length : H
-  list.forEach((a, i) => {
-    const y = 20 + i * step + (step - AH) / 2
-    nodes.append(fnode(a.key, AX, y, AW, AH))
-    edges.append(fedge(a.key, [hx + hr, cy], [AX, y + AH / 2]))
+  // The local model sits on its own at the top; the free/pool models fill the rest below.
+  const pad = 20, LH = 66, LGAP = 10, localGap = 22
+  const locals = list.filter((a) => a.local)
+  const rest = list.filter((a) => !a.local)
+  const localArea = locals.length ? locals.length * LH + (locals.length - 1) * LGAP + localGap : 0
+  const restStep = rest.length ? (H - pad * 2 - localArea) / rest.length : 0
+  const restH = Math.max(56, Math.min(84, restStep - 8))
+  locals.forEach((a, i) => {
+    const y = pad + i * (LH + LGAP)
+    nodes.append(fnode(a.key, AX, y, AW, LH))
+    edges.append(fedge(a.key, [hx + hr, cy], [AX, y + LH / 2]))
+  })
+  if (locals.length) {
+    const dy = pad + localArea - localGap / 2
+    nodes.append(s('line', { class: 'fsep', x1: AX - 12, y1: dy, x2: AX + AW, y2: dy }))
+    nodes.append(s('text', { class: 'fseplabel', x: AX + AW, y: dy - 7, 'text-anchor': 'end' }, 'local model'))
+  }
+  rest.forEach((a, i) => {
+    const y = pad + localArea + i * restStep + (restStep - restH) / 2
+    nodes.append(fnode(a.key, AX, y, AW, restH))
+    edges.append(fedge(a.key, [hx + hr, cy], [AX, y + restH / 2]))
   })
   if (flow.permVisible) {
     const PW = Math.min(380, W * 0.44), PH = 118
