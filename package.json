@@ -1,0 +1,12 @@
+{
+  "name": "orch",
+  "version": "0.1.0",
+  "description": "Let Claude Code hand work to free agents (opencode, Antigravity), with fallback and a live dashboard",
+  "type": "module",
+  "bin": { "orch": "bin/orch.mjs" },
+  "scripts": {
+    "start": "node bin/orch.mjs serve",
+    "test": "node --test test/*.test.mjs"
+  },
+  "engines": { "node": ">=22" }
+}

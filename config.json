@@ -1,0 +1,53 @@
+{
+  "port": 7777,
+  "defaultDir": "~/clt",
+  "maxParallel": 3,
+  "cooldownMinutes": 15,
+
+  "claudeHandoff": false,
+  "autoHandoff": false,
+  "claudeProjectsDir": "~/.claude/projects",
+
+  "autoPool": true,
+  "poolLimit": 6,
+  "poolPrefer": [
+    "glm-5.3-flash-free",
+    "deepseek-v4.1-flash-free",
+    "nemotron-3-ultra-free",
+    "nemotron-3.5-super-vl-free",
+    "nemotron-3.5-lightning-free",
+    "longcat-2.5-preview-free",
+    "mimo-v2.6-flash-free",
+    "beam-free",
+    "space-bunny-free"
+  ],
+  "routing": {
+    "code": ["glm-5.3-flash-free", "deepseek-v4.1-flash-free", "nemotron-3-ultra-free"],
+    "ui": ["nemotron-3.5-super-vl-free", "glm-5.3-flash-free", "mimo-v2.6-flash-free"],
+    "docs": ["deepseek-v4.1-flash-free", "beam-free", "space-bunny-free"],
+    "research": ["nemotron-3.5-lightning-free", "beam-free", "glm-5.3-flash-free"],
+    "data": ["nemotron-3-ultra-free", "deepseek-v4.1-flash-free", "longcat-2.5-preview-free"],
+    "general": ["glm-5.3-flash-free", "deepseek-v4.1-flash-free", "mimo-v2.6-flash-free"]
+  },
+
+  "fanout": true,
+  "plannerModel": "glm-5.3-flash-free",
+
+  "local": {
+    "enabled": false,
+    "baseUrl": "http://127.0.0.1:11434/v1/chat/completions",
+    "model": "qwen3:8b"
+  },
+
+  "chains": {
+    "delegate": [
+      { "agent": "opencode", "model": "opencode/glm-5.3-flash-free", "enabled": true },
+      { "agent": "opencode", "model": "opencode/deepseek-v4.1-flash-free", "enabled": true },
+      { "agent": "agy", "model": "gemini-3.8-flash-medium", "enabled": true }
+    ],
+    "handoff": [
+      { "agent": "agy", "model": "gemini-3.8-flash-high", "enabled": true },
+      { "agent": "opencode", "model": "opencode/glm-5.3-flash-free", "enabled": true }
+    ]
+  }
+}
