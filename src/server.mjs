@@ -10,7 +10,7 @@ import { discoverPool, buildChain } from './pool.mjs'
 import { buildHandoffPrompt, readTranscript } from './handoff.mjs'
 
 const ROOT = path.resolve(import.meta.dirname, '..')
-const EDITABLE = ['chains', 'autoHandoff', 'maxParallel', 'cooldownMinutes', 'fanout', 'local', 'claudeHandoff']
+const EDITABLE = ['chains', 'autoHandoff', 'maxParallel', 'cooldownMinutes', 'fanout', 'local', 'claudeHandoff', 'permissions']
 
 export const expandHome = (p) => p.replace(/^~(?=$|\/)/, os.homedir())
 
@@ -18,8 +18,16 @@ export function loadConfig(configPath) {
   return JSON.parse(fs.readFileSync(configPath, 'utf8'))
 }
 
+// Object-valued settings are merged on update, and filled with defaults on load,
+// so a partial payload can never wipe a field (e.g. the local model name).
+const DEFAULTS = {
+  local: { enabled: false, baseUrl: 'http://127.0.0.1:11434/v1/chat/completions', model: 'qwen3:8b' },
+  permissions: { mode: 'ask', trusted: [] },
+}
+
 export function createApp({ configPath = process.env.ORCH_CONFIG || path.join(ROOT, 'config.json'), dataDir = path.join(ROOT, 'data'), agentDefs } = {}) {
   const config = loadConfig(configPath)
+  for (const [k, def] of Object.entries(DEFAULTS)) config[k] = { ...def, ...config[k] }
   const runner = new Runner(config, dataDir, agentDefs)
   const watch = new ClaudeWatch(expandHome(config.claudeProjectsDir || '~/.claude/projects'))
   const clients = new Set()
@@ -29,6 +37,7 @@ export function createApp({ configPath = process.env.ORCH_CONFIG || path.join(RO
   runner.on('event', (ev) => send({ type: 'event', ev }))
   runner.on('run', (run) => send({ type: 'run', run }))
   runner.on('cooldowns', () => send({ type: 'config', config, cooldowns: cooldowns() }))
+  runner.on('config', () => send({ type: 'config', config, cooldowns: cooldowns() }))
   watch.on('session', (session) => send({ type: 'session', session }))
 
   function handoff(sessionId) {
@@ -100,11 +109,21 @@ export function createApp({ configPath = process.env.ORCH_CONFIG || path.join(RO
       return runner.public(runner.start({ task, dir: target, chain, agent, model, source: String(source).slice(0, 40) }))
     },
     'POST /api/runs/:id/kill': (req, res, id) => ({ killed: runner.kill(id) }),
+    'POST /api/runs/:id/permission': (req, res, id, body) => {
+      const { permissionId, allow, remember } = body
+      if (!permissionId || typeof allow !== 'boolean') throw httpError(400, 'permissionId and allow are required')
+      if (!runner.permissions.has(permissionId)) throw httpError(404, 'no such pending permission')
+      return { ok: runner.resolvePermission(permissionId, allow, !!remember) }
+    },
     'POST /api/sessions/:id/handoff': (req, res, id) => runner.public(handoff(id)),
     'PUT /api/config': (req, res, _id, body) => {
       const badChain = body.chains && Object.values(body.chains).some((c) => !Array.isArray(c) || c.some((e) => !runner.agents[e?.agent] || typeof e.model !== 'string'))
       if (badChain || ('maxParallel' in body && !(body.maxParallel >= 1))) throw httpError(400, 'invalid config')
-      for (const k of EDITABLE) if (k in body) config[k] = body[k]
+      for (const k of EDITABLE) {
+        if (!(k in body)) continue
+        if (DEFAULTS[k]) config[k] = { ...config[k], ...body[k] } // merge objects, never drop fields
+        else config[k] = body[k]
+      }
       fs.writeFileSync(configPath, JSON.stringify(config, null, 2) + '\n')
       send({ type: 'config', config, cooldowns: cooldowns() })
       return config

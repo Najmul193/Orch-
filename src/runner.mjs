@@ -6,9 +6,14 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { agents, isLimitError } from './agents.mjs'
 import { route, split } from './planner.mjs'
+import { classify } from './classify.mjs'
 
 const RETRY_NOTE = '\n\nNote: a previous attempt at this task may have left partial changes. Check `git status`/`git diff` first and continue from there.'
 const FINISHED = new Set(['done', 'failed', 'killed'])
+// Task kinds that make an agent touch files or run commands, so they need a human OK.
+const FILE_TAGS = new Set(['code', 'ui', 'data'])
+// Commands that hit the filesystem, the network, or the machine hard: pause and ask first.
+const RISKY = /\brm\s+-rf\b|\bsudo\b|\bgit\s+push\b|\bgit\s+reset\s+--hard\b|\bgit\s+clean\s+-[a-z]*f|\bchmod\s+-R\b|\bchown\b|\bdd\s+if=|\bmkfs\b|\bdiskutil\b|\bshutdown\b|\breboot\b|\bkillall\b|npm\s+publish|\bcurl\b[^\n|]*\|\s*(?:ba|z|fi)?sh|\bwget\b[^\n|]*\|\s*(?:ba|z|fi)?sh/i
 
 // Order of entries to try: an explicit model first, then the rest of the chain.
 export function planEntries(chain, { agent, model } = {}) {
@@ -30,6 +35,10 @@ export class Runner extends EventEmitter {
     this.queue = []
     this.cooldowns = {} // "agent:model" -> ms timestamp
     this.pool = { free: [], agy: [] } // discovered models for smart routing
+    this.permissions = new Map() // permission id -> pending user approval
+    this.permSeq = 0
+    config.permissions ??= { mode: 'ask', trusted: [] } // 'ask' | 'off'
+    config.permissions.trusted ??= []
     this.#loadHistory()
   }
 
@@ -129,12 +138,70 @@ export class Runner extends EventEmitter {
     const kids = (run.children || []).map((cid) => this.runs.get(cid)).filter((k) => k && !FINISHED.has(k.status))
     const targets = [run, ...kids]
     this.queue = this.queue.filter((r) => !targets.includes(r))
+    this.#denyPending(run)
     this.#finish(run, 'killed', 'stopped by user') // parent first, so children don't re-finish it
     for (const k of kids) this.#finish(k, 'killed', 'stopped by user')
     for (const t of targets) {
       const ch = t.child
       if (ch) { try { process.kill(-ch.pid, 'SIGTERM') } catch { try { ch.kill('SIGTERM') } catch {} } }
     }
+    return true
+  }
+
+  // A run is blocked on a permission prompt: unblock it (used when the run is killed).
+  #denyPending(run) {
+    for (const [id, p] of this.permissions) {
+      if (p.run === run || (run.children || []).includes(p.run.id)) { this.permissions.delete(id); p.resolve({ allow: false }) }
+    }
+  }
+
+  // Permission gate. Before an agent that can edit files or run shell is allowed
+  // to work in a folder the user hasn't trusted, park the run as "waiting" and
+  // resolve it when the user clicks Allow / Deny on the dashboard diagram.
+  async #guard(run) {
+    const perms = this.config.permissions
+    if (!perms || perms.mode === 'off' || run.plan?.local) return true
+    const tag = run.plan?.tag || classify(run.task).tag
+    run.plan = { ...(run.plan || {}), tag }
+    if (!FILE_TAGS.has(tag) || perms.trusted.includes(run.dir)) return true
+    // A prompt for this same folder may already be open (fan-out): share one answer.
+    const shared = [...this.permissions.values()].find((p) => p.rememberKey === run.dir)
+    if (shared) {
+      run.status = 'waiting'
+      run.permission = shared.run.permission
+      this.#changed(run)
+      return (await shared.promise).allow
+    }
+    return (await this.#ask(run, { kind: 'folder', what: 'Let an agent edit files and run commands here?', detail: run.dir, remember: run.dir })).allow
+  }
+
+  // Park the run and hand the dashboard a request it can answer from the diagram.
+  #ask(run, { kind, what, detail, remember }) {
+    const id = `permission-${++this.permSeq}`
+    run.permission = { id, kind, what, detail: String(detail ?? '').slice(0, 300), remember: remember || '' }
+    run.status = 'waiting'
+    this.#changed(run)
+    this.#event(run, { kind: 'info', text: `waiting for permission: ${run.permission.what}` })
+    let resolve
+    const promise = new Promise((r) => { resolve = r })
+    this.permissions.set(id, { resolve, promise, run, rememberKey: remember })
+    return promise
+  }
+
+  // Called by the dashboard when the user accepts or denies a prompt.
+  resolvePermission(id, allow, remember = false) {
+    const p = this.permissions.get(id)
+    if (!p) return false
+    this.permissions.delete(id)
+    const { run } = p
+    run.permission = null
+    if (allow && remember && p.rememberKey && !this.config.permissions.trusted.includes(p.rememberKey)) {
+      this.config.permissions.trusted.push(p.rememberKey)
+      this.emit('config')
+    }
+    this.#event(run, { kind: 'info', text: allow ? 'permission granted' : 'permission denied' })
+    if (allow && !FINISHED.has(run.status)) { run.status = 'running'; this.#changed(run) }
+    p.resolve({ allow })
     return true
   }
 
@@ -164,6 +231,12 @@ export class Runner extends EventEmitter {
   }
 
   async #exec(run) {
+    if (!(await this.#guard(run))) {
+      if (!FINISHED.has(run.status)) this.#finish(run, 'killed', 'permission denied')
+      return
+    }
+    if (FINISHED.has(run.status)) return
+    run.permission = null
     run.status = 'running'
     run.startedAt = Date.now()
     this.#changed(run)
@@ -189,6 +262,21 @@ export class Runner extends EventEmitter {
       prompt = run.task + RETRY_NOTE
     }
     this.#finish(run, 'failed', run.attempts.length ? `all agents failed (last: ${run.attempts.at(-1).error})` : 'no agent available (all disabled or cooling down)')
+  }
+
+  // A risky command is about to run: freeze the agent's process group, ask the
+  // user, then continue or kill the agent based on the answer.
+  async #pauseForCommand(run, child, command) {
+    try { process.kill(-child.pid, 'SIGSTOP') } catch { try { child.kill('SIGSTOP') } catch {} }
+    const { allow } = await this.#ask(run, { kind: 'command', what: 'Run this possibly risky command?', detail: command, remember: '' })
+    run.pending = false
+    if (allow) {
+      run.approved = true
+      try { process.kill(-child.pid, 'SIGCONT') } catch { try { child.kill('SIGCONT') } catch {} }
+    } else {
+      try { process.kill(-child.pid, 'SIGKILL') } catch { try { child.kill('SIGKILL') } catch {} }
+      this.kill(run.id)
+    }
   }
 
   #attempt(run, entry, prompt) {
@@ -219,6 +307,10 @@ export class Runner extends EventEmitter {
         for (const ev of parse(obj)) {
           if (ev.session && !run.session) { run.session = ev.session; this.#changed(run) }
           if (ev.kind === 'meta') continue
+          if (ev.kind === 'tool' && ev.text && RISKY.test(ev.text) && this.config.permissions?.mode !== 'off' && !run.approved && !run.pending) {
+            run.pending = true
+            this.#pauseForCommand(run, child, ev.text)
+          }
           if (ev.kind === 'error') errText += ev.text + '\n'
           if ((ev.kind === 'text' || ev.kind === 'done') && ev.text) run.final = ev.text
           this.#event(run, ev)
@@ -232,7 +324,8 @@ export class Runner extends EventEmitter {
 
   #finish(run, status, error = '') {
     if (FINISHED.has(run.status)) return
-    Object.assign(run, { status, error, endedAt: Date.now(), phase: '' })
+    this.#denyPending(run)
+    Object.assign(run, { status, error, endedAt: Date.now(), phase: '', permission: null })
     this.#write(run, { type: 'end', ...this.public(run) })
     this.#changed(run)
     if (run.parentId) this.#finishChildOf(run)

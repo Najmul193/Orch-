@@ -3,146 +3,232 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>orch</title>
+<title>orch · control room</title>
 <style>
   :root {
-    --bg: #f6f7f9; --panel: #ffffff; --line: #e3e6eb; --text: #1b1f24; --muted: #6b7380;
-    --accent: #3b6fe0; --ok: #1f9d55; --warn: #c27c0e; --bad: #d1435b; --run: #3b6fe0; --code: #f0f2f5; --panel2: #fbfcfd;
+    --bg0: #0a0c12; --bg1: #10131c; --panel: rgba(255,255,255,.045); --panel-solid: #141826;
+    --line: rgba(255,255,255,.09); --line-strong: rgba(255,255,255,.16);
+    --text: #eef1f6; --muted: #9aa3b2; --dim: #6b7280;
+    --a1: #7c9bff; --a2: #22d3ee; --ok: #34d399; --warn: #fbbf24; --bad: #fb7185;
+    --local: #34d399; --perm: #f59e0b;
+    --code: rgba(255,255,255,.05); --shadow: 0 10px 30px rgba(0,0,0,.35);
   }
-  @media (prefers-color-scheme: dark) {
-    :root { --bg: #0f1115; --panel: #171a20; --line: #2a2f38; --text: #e6e8eb; --muted: #8b93a1;
-      --accent: #6f9bff; --ok: #3ccf7f; --warn: #f0a93b; --bad: #ff6b81; --run: #6f9bff; --code: #1f232b; --panel2: #1c2027; }
+  @media (prefers-color-scheme: light) {
+    :root {
+      --bg0: #eef1f7; --bg1: #f6f8fc; --panel: rgba(255,255,255,.72); --panel-solid: #ffffff;
+      --line: rgba(20,24,40,.10); --line-strong: rgba(20,24,40,.18);
+      --text: #131722; --muted: #5b6373; --dim: #7b8494;
+      --a1: #4f6fe0; --a2: #0ea5b7; --ok: #12a06a; --warn: #c07d0a; --bad: #e04b63;
+      --local: #12a06a; --perm: #d97706;
+      --code: rgba(20,24,40,.05); --shadow: 0 10px 30px rgba(30,40,80,.12);
+    }
   }
   * { box-sizing: border-box; }
-  body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
-  header { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; padding: 12px 16px; border-bottom: 1px solid var(--line); background: var(--panel); position: sticky; top: 0; z-index: 1; }
-  header h1 { font-size: 17px; margin: 0; display: flex; align-items: center; gap: 8px; }
-  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); display: inline-block; }
-  .dot.on { background: var(--ok); }
-  header label { display: flex; align-items: center; gap: 6px; color: var(--muted); }
-  main { display: grid; grid-template-columns: minmax(300px, 380px) 1fr; gap: 16px; padding: 16px; max-width: 1500px; margin: 0 auto; }
-  @media (max-width: 900px) { main { grid-template-columns: 1fr; } }
-  section { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; margin-bottom: 16px; min-width: 0; }
-  h2 { font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 0 0 10px; display: flex; justify-content: space-between; align-items: center; }
-  h3 { font-size: 13px; margin: 12px 0 6px; }
-  button { font: inherit; font-size: 12px; padding: 3px 9px; border-radius: 6px; border: 1px solid var(--line); background: var(--panel); color: var(--text); cursor: pointer; }
-  button:hover { border-color: var(--accent); }
-  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  body {
+    margin: 0; min-height: 100%; color: var(--text);
+    font: 14px/1.5 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background:
+      radial-gradient(1100px 700px at 10% -10%, color-mix(in srgb, var(--a1) 22%, transparent), transparent 60%),
+      radial-gradient(900px 600px at 100% 0%, color-mix(in srgb, var(--a2) 16%, transparent), transparent 55%),
+      linear-gradient(180deg, var(--bg0), var(--bg1));
+    background-attachment: fixed;
+  }
+  header {
+    display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 20px;
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--bg0) 72%, transparent);
+    backdrop-filter: blur(14px) saturate(1.3); -webkit-backdrop-filter: blur(14px) saturate(1.3);
+    border-bottom: 1px solid var(--line);
+  }
+  header h1 { font-size: 18px; margin: 0; display: flex; align-items: center; gap: 9px; font-weight: 700; letter-spacing: .2px; }
+  header h1 .brand { background: linear-gradient(92deg, var(--a1), var(--a2)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+  .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--bad); box-shadow: 0 0 10px currentColor; color: var(--bad); display: inline-block; transition: .3s; }
+  .dot.on { background: var(--ok); color: var(--ok); animation: live 2s ease-in-out infinite; }
+  @keyframes live { 50% { box-shadow: 0 0 14px currentColor; } }
+  .spacer { flex: 1; }
+  .switch { display: inline-flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12.5px; cursor: pointer; user-select: none; padding: 5px 11px; border: 1px solid var(--line); border-radius: 999px; background: var(--panel); transition: .2s; }
+  .switch:hover { border-color: var(--line-strong); }
+  .switch input { appearance: none; width: 34px; height: 19px; border-radius: 999px; background: var(--line-strong); position: relative; cursor: pointer; transition: .2s; margin: 0; }
+  .switch input::after { content: ""; position: absolute; top: 2px; left: 2px; width: 15px; height: 15px; border-radius: 50%; background: #fff; transition: .25s cubic-bezier(.2,.8,.2,1); }
+  .switch input:checked { background: linear-gradient(92deg, var(--a1), var(--a2)); }
+  .switch input:checked::after { transform: translateX(15px); }
+  header label.num { color: var(--muted); font-size: 12.5px; display: inline-flex; align-items: center; gap: 6px; }
+  button { font: inherit; font-size: 12.5px; padding: 5px 12px; border-radius: 9px; border: 1px solid var(--line); background: var(--panel); color: var(--text); cursor: pointer; transition: .18s; }
+  button:hover { border-color: var(--line-strong); transform: translateY(-1px); }
+  button.primary { background: linear-gradient(92deg, var(--a1), var(--a2)); color: #06121a; font-weight: 600; border-color: transparent; box-shadow: 0 6px 18px color-mix(in srgb, var(--a1) 32%, transparent); }
   button.danger { color: var(--bad); }
-  input, select, textarea { font: inherit; font-size: 13px; padding: 5px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--bg); color: var(--text); min-width: 0; }
-  textarea { width: 100%; min-height: 70px; resize: vertical; }
-  .row { display: flex; align-items: center; gap: 8px; padding: 6px 0; border-top: 1px solid var(--line); }
+  input, select, textarea { font: inherit; font-size: 13px; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--line); background: color-mix(in srgb, var(--bg0) 55%, transparent); color: var(--text); min-width: 0; transition: .18s; }
+  input:focus, select:focus, textarea:focus { outline: none; border-color: var(--a1); box-shadow: 0 0 0 3px color-mix(in srgb, var(--a1) 22%, transparent); }
+  textarea { width: 100%; min-height: 84px; resize: vertical; }
+  .wrap { max-width: 1600px; margin: 0 auto; padding: 18px 20px 40px; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 18px; padding: 16px 18px; margin-bottom: 16px; box-shadow: var(--shadow); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); }
+  h2 { font-size: 12px; text-transform: uppercase; letter-spacing: .12em; color: var(--muted); margin: 0 0 12px; display: flex; justify-content: space-between; align-items: center; gap: 10px; font-weight: 600; }
+  h3 { font-size: 12px; margin: 14px 0 6px; color: var(--muted); text-transform: uppercase; letter-spacing: .08em; }
+  .grid { display: grid; grid-template-columns: minmax(340px, 430px) 1fr; gap: 16px; }
+  @media (max-width: 980px) { .grid { grid-template-columns: 1fr; } }
+  .row { display: flex; align-items: center; gap: 9px; padding: 8px; border-top: 1px solid var(--line); border-radius: 10px; }
   .row:first-of-type { border-top: 0; }
   .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .muted { color: var(--muted); font-size: 12px; }
-  .pill { font-size: 11px; padding: 1px 7px; border-radius: 99px; border: 1px solid currentColor; white-space: nowrap; }
-  .s-running, .s-active { color: var(--run); } .s-done { color: var(--ok); } .s-failed, .s-limited { color: var(--bad); }
+  .pill { font-size: 11px; padding: 2px 9px; border-radius: 999px; border: 1px solid currentColor; white-space: nowrap; }
+  .s-running, .s-active { color: var(--a1); } .s-done { color: var(--ok); } .s-failed { color: var(--bad); }
   .s-killed, .s-idle, .s-queued { color: var(--muted); } .s-cool { color: var(--warn); }
-  .runs .row { cursor: pointer; padding: 7px 6px; border-radius: 6px; }
-  .runs .row.sel { background: var(--code); }
-  .feed { font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, monospace; max-height: 55vh; overflow: auto; background: var(--code); border-radius: 8px; padding: 8px 10px; }
+  .s-planning { color: var(--a2); } .s-limited { color: var(--bad); } .s-waiting { color: var(--perm); }
+  .tag { font-size: 10.5px; padding: 1px 8px; border-radius: 999px; background: color-mix(in srgb, var(--a2) 18%, transparent); color: var(--a2); border: 1px solid color-mix(in srgb, var(--a2) 40%, transparent); }
+  .tag.local { background: color-mix(in srgb, var(--ok) 18%, transparent); color: var(--ok); border-color: color-mix(in srgb, var(--ok) 40%, transparent); }
+  .runs .row { cursor: pointer; }
+  .runs .row:hover { background: var(--code); }
+  .runs .row.sel { background: color-mix(in srgb, var(--a1) 14%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--a1) 35%, transparent); }
+  .childs { margin-left: 20px; border-left: 2px solid var(--line); }
+  .feed { font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; max-height: 52vh; overflow: auto; background: var(--code); border-radius: 12px; padding: 10px 12px; }
   .feed div { white-space: pre-wrap; word-break: break-word; padding: 1px 0; }
-  .k-tool { color: var(--accent); } .k-error { color: var(--bad); } .k-info { color: var(--muted); } .k-done { color: var(--ok); }
-  .k-text { color: var(--text); border-left: 2px solid var(--line); padding-left: 8px !important; margin: 4px 0; }
-  pre { background: var(--code); padding: 8px 10px; border-radius: 8px; overflow: auto; white-space: pre-wrap; font-size: 12px; margin: 6px 0; }
-  .form { display: grid; gap: 8px; }
-  .form .line { display: flex; gap: 8px; flex-wrap: wrap; }
-  .form .line > * { flex: 1; }
-  .empty { color: var(--muted); font-size: 13px; padding: 6px 0; }
-  .err { color: var(--bad); font-size: 12px; }
+  .k-tool { color: var(--a2); } .k-error { color: var(--bad); } .k-info { color: var(--muted); } .k-done { color: var(--ok); }
+  .k-text { color: var(--text); border-left: 2px solid var(--line-strong); padding-left: 8px; margin: 2px 0; }
+  .err { color: var(--bad); }
+  pre { font: 12px ui-monospace, Menlo, monospace; background: var(--code); padding: 8px 10px; border-radius: 10px; overflow: auto; }
 
-  /* Live flow */
-  .flowwrap { padding: 16px 16px 0; max-width: 1500px; margin: 0 auto; }
-  .flow { margin: 0; background-color: var(--panel); background-image: radial-gradient(var(--line) 1px, transparent 1px); background-size: 18px 18px; }
-  .flow svg { display: block; width: 100%; height: auto; max-height: 470px; overflow: visible; }
-  .edge { fill: none; stroke: var(--line); stroke-width: 2; transition: stroke .3s; }
-  .edge.active { stroke: var(--accent); stroke-width: 2.5; stroke-dasharray: 7 9; animation: dash .7s linear infinite; }
-  .edge.active.handoff { stroke: var(--warn); }
+  /* live flow */
+  .flow { padding: 8px 6px 4px; overflow: hidden; }
+  .flow-top { display: flex; align-items: center; gap: 12px; margin: 4px 8px 0; flex-wrap: wrap; }
+  .legend { display: flex; gap: 14px; color: var(--muted); font-size: 11.5px; align-items: center; }
+  .legend i { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-right: 5px; vertical-align: middle; }
+  .lg-task { background: var(--a1); } .lg-ok { background: var(--ok); } .lg-bad { background: var(--bad); } .lg-local { background: var(--local); } .lg-perm { background: var(--perm); }
+  svg#flow { display: block; width: 100%; height: calc(100vh - 250px); min-height: 430px; overflow: visible; }
+  .edge { fill: none; stroke: var(--line-strong); stroke-width: 2; transition: stroke .3s; }
+  .edge.active { stroke: var(--a1); stroke-width: 2.6; stroke-dasharray: 7 9; animation: dash .6s linear infinite; }
   @keyframes dash { to { stroke-dashoffset: -16; } }
-  .fnode .card { fill: var(--panel2); stroke: var(--line); stroke-width: 1.5; transition: stroke .3s; }
-  .fnode .pulse { fill: none; stroke: var(--accent); opacity: 0; }
-  .fnode .sdot { fill: var(--muted); }
-  .fnode .t1 { font: 600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: var(--text); }
-  .fnode .t2 { font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: var(--muted); }
-  .fnode .t3 { font: 11px ui-monospace, SFMono-Regular, Menlo, monospace; fill: var(--muted); }
-  .fnode[data-st=running] .card { stroke: var(--accent); filter: url(#glow); }
+  .fnode .card { fill: color-mix(in srgb, var(--panel-solid) 92%, transparent); stroke: var(--line-strong); stroke-width: 1.5; transition: stroke .3s, fill .3s; }
+  .fnode .pulse { fill: none; stroke: var(--a1); opacity: 0; }
+  .fnode .sdot { fill: var(--dim); transition: fill .3s; }
+  .fnode .t1 { font: 600 15px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: var(--text); }
+  .fnode .t2 { font: 12px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: var(--muted); }
+  .fnode .t3 { font: 11.5px ui-monospace, SFMono-Regular, Menlo, monospace; fill: var(--muted); }
+  .fnode[data-st=running] .card { stroke: var(--a1); fill: color-mix(in srgb, var(--a1) 10%, var(--panel-solid)); }
   .fnode[data-st=running] .pulse { animation: pulse 1.8s ease-out infinite; }
-  .fnode[data-st=running] .sdot, .fnode[data-st=running] .t3 { fill: var(--accent); }
-  .fnode[data-st=cooling] .card { stroke: var(--warn); stroke-dasharray: 5 4; }
+  .fnode[data-st=running] .sdot, .fnode[data-st=running] .t3 { fill: var(--a1); }
+  .fnode[data-st=cooling] .card { stroke: var(--warn); }
   .fnode[data-st=cooling] .sdot, .fnode[data-st=cooling] .t3 { fill: var(--warn); }
   .fnode[data-st=limited] .card { stroke: var(--bad); }
-  .fnode[data-st=limited] .pulse { stroke: var(--bad); animation: pulse 1.8s ease-out infinite; }
-  .fnode[data-st=limited] .sdot, .fnode[data-st=limited] .t3 { fill: var(--bad); }
-  .fnode[data-st=disabled] { opacity: .38; }
-  @keyframes pulse { 0% { opacity: .55; stroke-width: 1; } 100% { opacity: 0; stroke-width: 18; } }
+  .fnode[data-st=disabled] { opacity: .4; }
+  @keyframes pulse { 0% { opacity: .5; stroke-width: 1; } 100% { opacity: 0; stroke-width: 20; } }
   .fnode.flash-go .card { animation: fgo 1s ease-out; }
   .fnode.flash-ok .card { animation: fok 1.3s ease-out; }
   .fnode.flash-bad .card { animation: fbad 1.3s ease-out; }
   .fnode.flash-tick .sdot { animation: tick .5s ease-out; }
-  @keyframes fgo { 0%, 25% { stroke: var(--accent); fill: color-mix(in srgb, var(--accent) 22%, var(--panel2)); } }
-  @keyframes fok { 0%, 25% { stroke: var(--ok); fill: color-mix(in srgb, var(--ok) 25%, var(--panel2)); } }
-  @keyframes fbad { 0%, 25% { stroke: var(--bad); fill: color-mix(in srgb, var(--bad) 25%, var(--panel2)); } }
-  @keyframes tick { 0% { r: 9px; } }
-  .hub .core { fill: url(#coreg); stroke: var(--line); stroke-width: 2; transition: stroke .3s; }
-  .hub .ring { fill: none; stroke: var(--line); stroke-width: 2; stroke-dasharray: 3 9; transform-box: fill-box; transform-origin: center; }
-  .hub .halo { fill: none; stroke: var(--accent); opacity: 0; }
-  .hub[data-st=running] .core { stroke: var(--accent); }
-  .hub[data-st=running] .ring { stroke: var(--accent); animation: spin 5s linear infinite; }
+  @keyframes fgo { 0%, 22% { stroke: var(--a1); } }
+  @keyframes fok { 0%, 22% { stroke: var(--ok); } }
+  @keyframes fbad { 0%, 22% { stroke: var(--bad); } }
+  @keyframes tick { 0% { r: 10px; } }
+  .hub .core { fill: url(#coreGrad); stroke: var(--line-strong); stroke-width: 2; transition: stroke .3s; }
+  .hub .ring { fill: none; stroke: var(--a1); opacity: .5; stroke-width: 2; stroke-dasharray: 2 10; transform-box: fill-box; transform-origin: center; }
+  .hub .halo { fill: none; stroke: var(--a1); opacity: 0; }
+  .hub[data-st=running] .core { stroke: var(--a1); }
+  .hub[data-st=running] .ring { animation: spin 6s linear infinite; }
   .hub[data-st=running] .halo { animation: pulse 2.2s ease-out infinite; }
-  .hub.flash-go .core { animation: fgo .8s ease-out; }
   @keyframes spin { to { transform: rotate(360deg); } }
-  .hub .hubt { font: 700 18px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: var(--text); }
-  .hub .hubs { font: 11px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: var(--muted); }
+  .hub .hubt { font: 800 20px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: var(--text); }
+  .hub .hubs { font: 11.5px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; fill: var(--muted); }
   .particle { filter: url(#glow); }
-  .p-task { fill: var(--accent); } .p-handoff { fill: var(--warn); } .p-ok { fill: var(--ok); } .p-bad { fill: var(--bad); }
-  .ticker { display: flex; flex-direction: column; gap: 4px; margin-top: 8px; height: 124px; overflow: hidden; }
-  .ticker:empty::before { content: 'Agent activity shows up here as it happens.'; color: var(--muted); font-size: 12px; }
-  .chip { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; padding: 3px 9px; border-radius: 6px; background: var(--code); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: slidein .35s ease-out; }
-  .chip b { font-weight: 600; margin-right: 6px; }
-  .chip:nth-child(n+3) { opacity: .7; } .chip:nth-child(n+5) { opacity: .45; }
+  .p-task { fill: var(--a1); } .p-ok { fill: var(--ok); } .p-bad { fill: var(--bad); } .p-local { fill: var(--ok); }
+
+  /* the local model and permission prompts get their own colours */
+  .fnode[data-st=local] .card { stroke: var(--local); fill: color-mix(in srgb, var(--local) 10%, var(--panel-solid)); }
+  .fnode[data-st=local] .sdot, .fnode[data-st=local] .t3 { fill: var(--local); }
+  .fnode[data-st=permission] .card { stroke: var(--perm); stroke-width: 2.5; fill: color-mix(in srgb, var(--perm) 12%, var(--panel-solid)); }
+  .fnode[data-st=permission] .pulse { stroke: var(--perm); animation: pulse 1.7s ease-out infinite; }
+  .perm-link { stroke: var(--perm); stroke-dasharray: 7 9; animation: dash .6s linear infinite; }
+  .permbox { width: 100%; height: 100%; box-sizing: border-box; padding: 12px 14px; display: flex; flex-direction: column; gap: 7px; font: 13px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; color: var(--text); }
+  .permhead { display: flex; align-items: center; gap: 8px; }
+  .permhead .pill { font-size: 11px; color: var(--perm); border-color: var(--perm); }
+  .permwhat { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .permdir { font: 11.5px ui-monospace, Menlo, monospace; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .permbtns { display: flex; align-items: center; gap: 8px; margin-top: auto; }
+  .permbtns button { padding: 5px 16px; border-radius: 9px; font-weight: 600; }
+  .permbtns button.allow { background: var(--perm); color: #1a1205; border-color: transparent; }
+  .permbtns button.deny { color: var(--bad); }
+  .permbtns .remember { font-size: 11.5px; color: var(--muted); display: inline-flex; align-items: center; gap: 5px; }
+  .pill.s-waiting { color: var(--perm); }
+
+  .plans { display: flex; gap: 12px; overflow-x: auto; padding: 12px 4px 6px; }
+  .plans:empty { display: none; }
+  .plan { min-width: 264px; max-width: 330px; border: 1px solid var(--line); border-radius: 14px; background: var(--panel); padding: 12px; transition: border-color .3s, box-shadow .3s; }
+  .plan.live { border-color: color-mix(in srgb, var(--a1) 55%, transparent); box-shadow: 0 0 0 1px color-mix(in srgb, var(--a1) 30%, transparent), 0 8px 24px rgba(0,0,0,.25); }
+  .plan .ptop { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .plan .ptitle { font-weight: 600; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 6px; }
+  .subs { display: grid; gap: 6px; overflow: hidden; transition: max-height .45s cubic-bezier(.2,.8,.2,1), opacity .35s; }
+  .sub { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--muted); }
+  .sub .bar { width: 7px; height: 7px; border-radius: 50%; background: var(--dim); flex: none; }
+  .sub.running .bar { background: var(--a1); animation: live 1.4s ease-in-out infinite; }
+  .sub.done .bar { background: var(--ok); } .sub.failed .bar { background: var(--bad); }
+  .plan .psum { font-size: 11.5px; color: var(--muted); margin-top: 8px; }
+
+  .ticker { display: flex; flex-direction: column; gap: 5px; margin-top: 10px; height: 116px; overflow: hidden; }
+  .ticker:empty::before { content: 'Agent activity streams here as it happens.'; color: var(--dim); font-size: 12px; }
+  .chip { font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; padding: 4px 10px; border-radius: 8px; background: var(--code); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; animation: slidein .35s ease-out; border: 1px solid var(--line); }
+  .chip b { font-weight: 600; margin-right: 6px; color: var(--a1); }
+  .chip:nth-child(n+3) { opacity: .72; } .chip:nth-child(n+5) { opacity: .45; }
   @keyframes slidein { from { transform: translateY(-6px); opacity: 0; } }
-  @media (prefers-reduced-motion: reduce) {
-    .edge.active, .fnode .pulse, .hub .ring, .hub .halo, .chip, .fnode .card, .fnode .sdot { animation: none !important; }
-  }
+  @media (prefers-reduced-motion: reduce) { * { animation-duration: .001s !important; transition-duration: .001s !important; } }
 </style>
 </head>
 <body>
 <header>
-  <h1><span id="dot" class="dot" title="live connection"></span> orch</h1>
-  <label><input type="checkbox" id="autoHandoff"> Auto-handoff when Claude hits its limit</label>
-  <label>Parallel <input type="number" id="maxParallel" min="1" max="10" style="width:56px"></label>
+  <h1><span id="dot" class="dot" title="live connection"></span><span class="brand">orch</span> <span class="muted" style="font-weight:500">control room</span></h1>
+  <span class="spacer"></span>
+  <label class="switch" title="Route simple, non-file tasks to your local Qwen model"><input type="checkbox" id="localEnabled"> Local model <span id="localName" class="muted"></span></label>
+  <label class="num">Parallel <input type="number" id="maxParallel" min="1" max="10" style="width:58px"></label>
+  <label class="switch" title="Split a task into independent parts and run them on several agents at once"><input type="checkbox" id="fanout"> Fan-out</label>
   <button id="clearCool">Clear cooldowns</button>
   <span id="msg" class="err"></span>
 </header>
-<div class="flowwrap">
-  <section class="flow">
-    <h2>Live flow <span id="flowStats" style="text-transform:none;letter-spacing:0"></span></h2>
-    <svg id="flow" role="img" aria-label="Live view of which agent is doing what"></svg>
+
+<div class="wrap">
+  <section class="card flow">
+    <div class="flow-top">
+      <h2 style="margin:0">Live flow <span id="flowStats" class="muted" style="text-transform:none;letter-spacing:0"></span></h2>
+      <span class="spacer"></span>
+      <div class="legend">
+        <span><i class="lg-task"></i>task</span><span><i class="lg-ok"></i>done</span><span><i class="lg-bad"></i>failed</span><span><i class="lg-local"></i>local model</span><span><i class="lg-perm"></i>needs permission</span>
+      </div>
+    </div>
+    <svg id="flow" role="img" aria-label="Live view of what each agent is doing"></svg>
+    <div id="plans" class="plans"></div>
     <div id="ticker" class="ticker" aria-live="polite"></div>
   </section>
-</div>
-<main>
-  <div>
-    <section><h2>Agents</h2><div id="agents"></div></section>
-    <section><h2>Claude sessions</h2><div id="sessions"></div></section>
-  </div>
-  <div>
-    <section>
-      <h2>New task</h2>
-      <div class="form">
-        <textarea id="task" placeholder="What should the agent do? Be specific: files, the change, how to know it's done."></textarea>
-        <div class="line">
-          <input id="dir" placeholder="/absolute/project/folder">
+
+  <div class="grid">
+    <div>
+      <section class="card">
+        <h2>New task</h2>
+        <textarea id="task" placeholder="Describe the task. orch routes it to the best free model, splits it across agents when it can, and switches automatically on rate limits."></textarea>
+        <div class="row" style="border-top:0;padding:6px 0 0;flex-wrap:wrap">
+          <input id="dir" class="grow" placeholder="/absolute/project/folder">
           <select id="chain"></select>
           <select id="model"></select>
           <button class="primary" id="start" style="flex:0">Start</button>
         </div>
-      </div>
-    </section>
-    <section><h2>Runs</h2><div id="runs" class="runs"></div></section>
-    <section id="detailBox" hidden><h2><span id="detailTitle" style="text-transform:none;letter-spacing:0;color:var(--text);font-size:14px"></span><span id="detailActions"></span></h2><div id="detail"></div></section>
+      </section>
+      <section class="card">
+        <h2>Runs <span id="runCount" class="muted" style="text-transform:none;letter-spacing:0"></span></h2>
+        <div id="runs" class="runs"></div>
+      </section>
+    </div>
+    <div>
+      <section class="card">
+        <h2>Agent pool <span id="poolStats" class="muted" style="text-transform:none;letter-spacing:0"></span></h2>
+        <div id="agents"></div>
+      </section>
+      <section class="card" id="detailBox" hidden>
+        <h2><span id="detailTitle" style="text-transform:none;letter-spacing:0;color:var(--text);font-size:14px"></span><span id="detailActions"></span></h2>
+        <div id="detail"></div>
+      </section>
+      <section class="card">
+        <h2>How routing works</h2>
+        <div class="muted" style="font-size:12.5px;line-height:1.6">Each task is classified (code / ui / docs / research / data / general) and sent to the best free model for that kind. Simple, non-file tasks use the <b style="color:var(--local)">local model</b> when it is on. Anything rate-limited cools down and the next model takes over automatically. With <b>Fan-out</b> on, a task that has independent parts is split across several agents at once and their results are merged. Before an agent may edit files or run a risky command in a folder you have not trusted, orch pauses and <b style="color:var(--perm)">asks your permission</b> right on the diagram — click Allow or Deny there.</div>
+      </section>
+    </div>
   </div>
-</main>
+</div>
 <datalist id="models-opencode"></datalist>
 <datalist id="models-agy"></datalist>
 <script>
@@ -164,7 +250,7 @@ function h(tag, props = {}, ...kids) {
 }
 const ago = (t) => { const s = Math.max(0, (Date.now() - t) / 1000); return s < 60 ? `${s | 0}s` : s < 3600 ? `${(s / 60) | 0}m` : `${(s / 3600).toFixed(1)}h` }
 const dur = (a, b) => ago(Date.now() - ((b ?? Date.now()) - a))
-const base = (p) => p?.split('/').filter(Boolean).pop() ?? ''
+const short = (m) => String(m ?? '').replace(/^opencode\//, '')
 
 async function api(method, url, body) {
   const res = await fetch(url, { method, headers: { 'content-type': 'application/json' }, body: body && JSON.stringify(body) })
@@ -176,10 +262,15 @@ const saveChains = () => api('PUT', '/api/config', { chains: state.config.chains
 
 function renderAgents() {
   const box = $('agents')
-  if (box.contains(document.activeElement) && document.activeElement.tagName !== 'BUTTON') return // don't wipe what you're typing
+  if (box.contains(document.activeElement) && document.activeElement.tagName !== 'BUTTON') return
   box.replaceChildren()
+  const local = state.config.local
+  if (local?.model) box.append(h('h3', {}, 'Local (this machine)'), h('div', { class: 'row' },
+    h('span', { class: `pill ${local.enabled ? 's-running' : 's-idle'}` }, local.enabled ? 'on' : 'off'),
+    h('span', { class: 'grow' }, h('b', {}, 'ollama'), ' ', local.model),
+    h('span', { class: 'tag local' }, 'simple tasks')))
   for (const [name, chain] of Object.entries(state.config.chains)) {
-    box.append(h('h3', {}, name === 'delegate' ? 'Delegate (small tasks)' : name === 'handoff' ? 'Handoff (Claude hit its limit)' : name))
+    box.append(h('h3', {}, name === 'delegate' ? 'Free model pool' : name))
     chain.forEach((e, i) => {
       const key = `${e.agent}:${e.model}`
       const cool = state.cooldowns[key]
@@ -187,7 +278,7 @@ function renderAgents() {
       const move = (d) => { const j = i + d; if (j < 0 || j >= chain.length) return; [chain[i], chain[j]] = [chain[j], chain[i]]; saveChains() }
       box.append(h('div', { class: 'row' },
         h('input', { type: 'checkbox', checked: e.enabled !== false, title: 'enabled', onchange: (ev) => { e.enabled = ev.target.checked; saveChains() } }),
-        h('span', { class: 'grow', title: key }, h('b', {}, e.agent), ' ', e.model),
+        h('span', { class: 'grow', title: key }, h('b', {}, e.agent), ' ', short(e.model)),
         busy ? h('span', { class: 'pill s-running' }, `${busy} running`) : null,
         cool > Date.now() ? h('span', { class: 'pill s-cool' }, `cooling ${dur(Date.now(), cool)}`) : null,
         h('button', { title: 'move up', onclick: () => move(-1) }, '↑'),
@@ -203,30 +294,28 @@ function renderAgents() {
   }
 }
 
-function renderSessions() {
-  const list = [...state.sessions.values()].sort((a, b) => b.lastActivity - a.lastActivity).slice(0, 12)
-  $('sessions').replaceChildren(...(list.length ? list.map((s) => h('div', { class: 'row', style: 'align-items:flex-start' },
-    h('div', { class: 'grow', style: 'white-space:normal' },
-      h('div', {}, h('b', { title: s.cwd }, base(s.cwd) || s.project), ' ', h('span', { class: `pill s-${s.status}` }, s.status)),
-      h('div', { class: 'muted grow', title: s.lastTool }, s.limited ? s.limitText : s.lastTool || '—'),
-      h('div', { class: 'muted' }, `${ago(s.lastActivity)} ago`)),
-    h('button', { title: 'Continue this session on the handoff chain now', onclick: async () => { const r = await api('POST', `/api/sessions/${encodeURIComponent(s.id)}/handoff`, {}); if (r) select(r.id) } }, 'Hand off')))
-    : [h('div', { class: 'empty' }, 'No Claude Code sessions in the last 6 hours.')]))
+function runRow(r, indent) {
+  return h('div', { class: `row${indent ? ' child' : ''}${selected === r.id ? ' sel' : ''}`, onclick: (ev) => { ev.stopPropagation(); select(r.id) } },
+    h('span', { class: `pill s-${r.status}` }, r.status),
+    r.plan?.tag ? h('span', { class: 'tag' + (r.plan.local ? ' local' : '') }, r.plan.tag) : null,
+    h('span', { class: 'grow', title: r.title }, (indent ? '↳ ' : '') + r.title),
+    h('span', { class: 'muted' }, r.agent ? `${r.agent} · ${short(r.model)}` : r.chain),
+    h('span', { class: 'muted' }, r.startedAt ? dur(r.startedAt, r.endedAt) : ''),
+    ['running', 'waiting', 'queued', 'planning'].includes(r.status) ? h('button', { class: 'danger', onclick: (ev) => { ev.stopPropagation(); api('POST', `/api/runs/${r.id}/kill`, {}) } }, 'Stop') : null)
 }
 
 function renderRuns() {
-  const list = [...state.runs.values()].sort((a, b) => b.createdAt - a.createdAt).slice(0, 60)
-  $('runs').replaceChildren(...(list.length ? list.map((r) => h('div', { class: `row${r.id === selected ? ' sel' : ''}`, onclick: () => select(r.id) },
-    h('span', { class: `pill s-${r.status}` }, r.status),
-    h('span', { class: 'grow', title: r.title }, r.title),
-    h('span', { class: 'muted' }, r.agent ? `${r.agent} · ${r.model}` : r.chain),
-    h('span', { class: 'muted', title: r.dir }, base(r.dir)),
-    h('span', { class: 'muted' }, r.startedAt ? dur(r.startedAt, r.endedAt) : ''),
-    ['running', 'queued'].includes(r.status) ? h('button', { class: 'danger', onclick: (ev) => { ev.stopPropagation(); api('POST', `/api/runs/${r.id}/kill`, {}) } }, 'Stop') : null))
-    : [h('div', { class: 'empty' }, 'No runs yet. Claude starts them with `orch delegate`, or use the form above.')]))
+  const all = [...state.runs.values()].sort((a, b) => b.createdAt - a.createdAt)
+  const parents = all.filter((r) => !r.parentId)
+  $('runCount').textContent = parents.length ? `${parents.length} run${parents.length === 1 ? '' : 's'}` : ''
+  $('runs').replaceChildren(...(parents.length ? parents.map((r) => {
+    const kids = (r.children || []).map((id) => state.runs.get(id)).filter(Boolean)
+    return h('div', {}, runRow(r, false), kids.length ? h('div', { class: 'childs' }, ...kids.map((k) => runRow(k, true))) : null)
+  }) : [h('div', { class: 'muted', style: 'padding:8px' }, 'No runs yet. Type a task above and press Start.')]))
 }
 
 let detail = null
+let taskOpen = false
 async function select(id) {
   selected = id
   detail = await api('GET', `/api/runs/${id}`)
@@ -239,47 +328,62 @@ function renderDetail() {
   $('detailBox').hidden = !r
   if (!r) return
   $('detailTitle').textContent = r.title
-  $('detailActions').replaceChildren(...(['running', 'queued'].includes(r.status) ? [h('button', { class: 'danger', onclick: () => api('POST', `/api/runs/${r.id}/kill`, {}) }, 'Stop')] : []))
+  $('detailActions').replaceChildren(...(['running', 'waiting', 'queued', 'planning'].includes(r.status) ? [h('button', { class: 'danger', onclick: () => api('POST', `/api/runs/${r.id}/kill`, {}) }, 'Stop')] : []))
   const box = $('detail')
   const old = box.querySelector('.feed')
   const atBottom = !old || old.scrollHeight - old.scrollTop - old.clientHeight < 40
   const feedEl = h('div', { class: 'feed' }, feed.length ? feed.map((e) => h('div', { class: `k-${e.kind}` },
     e.kind === 'tool' ? `▸ ${e.text}` : e.kind === 'done' ? '✓ finished' : e.kind === 'error' ? `✗ ${e.text}` : e.kind === 'info' ? `· ${e.text}` : e.text)) : h('div', { class: 'k-info' }, 'waiting for output…'))
   box.replaceChildren(h('div', {},
-    h('div', { class: 'muted' }, h('span', { class: `pill s-${r.status}` }, r.status), ` ${r.agent ?? ''} ${r.model ?? ''} · ${r.dir} · ${r.chain} · from ${r.source}`),
+    h('div', { class: 'muted' }, h('span', { class: `pill s-${r.status}` }, r.status), ' ',
+      r.plan?.tag ? h('span', { class: 'tag' + (r.plan.local ? ' local' : '') }, r.plan.tag) : '', ` ${r.agent ?? ''} ${short(r.model)} · ${r.dir} · ${r.chain} · from ${r.source}`),
+    r.permission ? h('div', { style: 'margin-top:6px' }, h('b', { style: 'color:var(--perm)' }, 'Permission needed: '), r.permission.what + ' ', r.permission.detail ? h('code', {}, r.permission.detail) : null, ' ', h('button', { class: 'primary', onclick: () => decidePermission(true) }, 'Allow'), ' ', h('button', { onclick: () => decidePermission(false) }, 'Deny')) : null,
     r.error ? h('div', { class: 'err' }, r.error) : null,
-    r.attempts?.length > 1 ? h('div', { class: 'muted' }, 'Attempts: ', r.attempts.map((a) => `${a.model} ${a.ok ? '✓' : '✗'}`).join(' → ')) : null,
+    (r.children || []).length ? h('div', { class: 'muted', style: 'margin-top:4px' }, `Fan-out: ${r.children.length} parallel subtasks`) : null,
+    r.attempts?.length > 1 ? h('div', { class: 'muted' }, 'Attempts: ', r.attempts.map((a) => `${short(a.model)} ${a.ok ? '✓' : '✗'}`).join(' → ')) : null,
     r.resume ? h('div', {}, h('h3', {}, 'Keep talking to this agent'), h('pre', {}, r.resume)) : null,
-    detail?.task ? h('details', { open: taskOpen, ontoggle: (e) => { taskOpen = e.target.open } }, h('summary', { class: 'muted' }, 'Task sent to the agent'), h('pre', {}, detail.task)) : null,
-    h('h3', {}, 'Live activity'), feedEl))
-  if (atBottom) feedEl.scrollTop = feedEl.scrollHeight
-  else feedEl.scrollTop = old.scrollTop
+    detail?.task ? h('details', { open: taskOpen, ontoggle: (e) => { taskOpen = e.target.open } }, h('summary', { class: 'muted' }, 'Task sent to the agent'), h('pre', { style: 'white-space:pre-wrap' }, detail.task)) : null,
+    h('h3', {}, 'Live activity'), (() => {
+      const el = h('div', { class: 'feed' }, feed.length ? feed.map((e) => h('div', { class: `k-${e.kind}` },
+        e.kind === 'tool' ? `▸ ${e.text}` : e.kind === 'done' ? '✓ finished' : e.kind === 'error' ? `✗ ${e.text}` : e.kind === 'info' ? `· ${e.text}` : e.text)) : h('div', { class: 'k-info' }, 'waiting for output…'))
+      flow.feedEl = el
+      return el
+    })()))
+  const feedEl2 = flow.feedEl
+  const old2 = $('detail').querySelector('.feed')
+  if (old2 === feedEl2) {
+    const atBottom = true
+    feedEl2.scrollTop = atBottom ? feedEl2.scrollHeight : feedEl2.scrollTop
+  }
 }
-let taskOpen = false
 
 function renderForm() {
   const chainSel = $('chain')
   if (!chainSel.options.length) for (const name of Object.keys(state.config.chains)) chainSel.append(h('option', { value: name }, `${name} chain`))
   const models = [...new Set(Object.values(state.config.chains).flat().map((e) => `${e.agent}|${e.model}`))]
+  const local = state.config.local
   const cur = $('model').value
-  $('model').replaceChildren(h('option', { value: '' }, 'first available model'), ...models.map((m) => h('option', { value: m }, m.replace('|', ' · '))))
+  $('model').replaceChildren(
+    h('option', { value: '' }, 'auto — best for the task'),
+    ...(local?.enabled ? [h('option', { value: `local|${local.model}` }, `local · ${local.model}`)] : []),
+    ...models.map((m) => h('option', { value: m }, m.replace('|', ' · '))))
   $('model').value = cur
-  $('autoHandoff').checked = !!state.config.autoHandoff
-  const dirIn = $('dir')
-  dirIn.placeholder = state.config.defaultDir ? `${state.config.defaultDir} (default — leave blank to use it)` : '/absolute/project/folder'
+  $('fanout').checked = state.config.fanout !== false
+  $('localEnabled').checked = !!local?.enabled
+  $('localName').textContent = local?.model ? `(${local.model})` : ''
+  $('dir').placeholder = state.config.defaultDir ? `${state.config.defaultDir} (default)` : '/absolute/project/folder'
   if (document.activeElement !== $('maxParallel')) $('maxParallel').value = state.config.maxParallel ?? 3
 }
 
-// The detail panel only redraws when its run changes, so selecting or copying text in it works.
-let queued = false
-let detailDirty = false
+let queued = false, detailDirty = false
 function render(detailToo = true) {
   detailDirty ||= detailToo
   if (queued || !state.config) return
   queued = true
   requestAnimationFrame(() => {
     queued = false
-    renderAgents(); renderSessions(); renderRuns(); renderFlow()
+    renderAgents(); renderRuns(); renderForm()
+    renderFlow(); renderPlans()
     if (detailDirty) { detailDirty = false; renderDetail() }
   })
 }
@@ -291,45 +395,13 @@ async function load() {
   state.cooldowns = s.cooldowns
   state.runs = new Map(s.runs.map((r) => [r.id, r]))
   state.sessions = new Map(s.sessions.map((x) => [x.id, x]))
-  renderForm()
   render()
 }
 
-const es = new EventSource('/events')
-es.onopen = () => { $('dot').classList.add('on'); load() }
-es.onerror = () => $('dot').classList.remove('on')
-es.onmessage = (m) => {
-  const msg = JSON.parse(m.data)
-  flowOn(msg) // before state changes, so it can compare old and new
-  if (msg.type === 'run') state.runs.set(msg.run.id, msg.run)
-  if (msg.type === 'session') state.sessions.set(msg.session.id, msg.session)
-  if (msg.type === 'config') { state.config = msg.config; state.cooldowns = msg.cooldowns; renderForm() }
-  if (msg.type === 'event' && msg.ev.runId === selected) feed.push(msg.ev)
-  if (msg.type === 'run' && !selected && msg.run.status === 'running') return select(msg.run.id)
-  render((msg.type === 'run' && msg.run.id === selected) || (msg.type === 'event' && msg.ev.runId === selected))
-}
-
-$('autoHandoff').onchange = (e) => api('PUT', '/api/config', { autoHandoff: e.target.checked })
-$('maxParallel').onchange = (e) => api('PUT', '/api/config', { maxParallel: Number(e.target.value) })
-$('clearCool').onclick = () => api('DELETE', '/api/cooldowns')
-$('start').onclick = async () => {
-  const [agent, model] = $('model').value ? $('model').value.split('|') : []
-  const r = await api('POST', '/api/runs', { task: $('task').value, dir: $('dir').value.trim(), chain: $('chain').value, agent, model, source: 'dashboard' })
-  if (r) { $('task').value = ''; select(r.id) }
-}
-setInterval(() => render(false), 1000) // keep elapsed times and cooldown countdowns fresh
-
-// Model suggestions for the "Add" rows (the CLIs are slow to list them, so load once in the background).
-fetch('/api/models').then((r) => r.json()).then((all) => {
-  for (const [agent, list] of Object.entries(all)) {
-    $(`models-${agent}`)?.replaceChildren(...[...list].sort((a, b) => /free/.test(b) - /free/.test(a)).map((m) => h('option', { value: m }, /free/.test(m) ? 'free' : agent)))
-  }
-}).catch(() => {})
-
-// ---------- Live flow: sources → orch hub → agents, animated from the SSE stream ----------
+// ---------- Live flow: You → orch → agents, animated from the SSE stream ----------
 const NS = 'http://www.w3.org/2000/svg'
 const reduceMotion = matchMedia('(prefers-reduced-motion: reduce)').matches
-const flow = { sig: '', nodes: {}, edges: {}, particles: [], raf: 0, activity: new Map(), outcome: new Map() }
+const flow = { sig: '', W: 0, H: 0, permVisible: false, nodes: {}, edges: {}, particles: [], raf: 0, activity: new Map(), outcome: new Map(), feedEl: null }
 const fit = (t, n) => { t = String(t ?? '').replace(/\s+/g, ' ').trim(); return t.length > n ? t.slice(0, n - 1) + '…' : t }
 
 function s(tag, attrs = {}, ...kids) {
@@ -348,6 +420,8 @@ function flowAgents() {
     n.enabled ||= e.enabled !== false
     m.set(key, n)
   })
+  const local = state.config.local
+  if (local?.enabled && local.model) m.set(`local:${local.model}`, { key: `local:${local.model}`, agent: 'local', model: local.model, tags: ['local'], enabled: true, local: true })
   for (const r of state.runs.values()) {
     const key = `${r.agent}:${r.model}`
     if (r.agent && r.status === 'running' && !m.has(key)) m.set(key, { key, agent: r.agent, model: r.model, tags: ['picked by hand'], enabled: true })
@@ -357,97 +431,141 @@ function flowAgents() {
 
 function fnode(id, x, y, w, hgt) {
   const g = s('g', { class: 'fnode', transform: `translate(${x},${y})` },
-    s('rect', { class: 'pulse', x: -2, y: -2, width: w + 4, height: hgt + 4, rx: 14 }),
-    s('rect', { class: 'card', width: w, height: hgt, rx: 12 }),
-    s('circle', { class: 'sdot', cx: 17, cy: 20, r: 4.5 }),
-    s('text', { class: 't1', x: 29, y: 25 }), s('text', { class: 't2', x: 17, y: 43 }), s('text', { class: 't3', x: 17, y: 59 }))
+    s('rect', { class: 'pulse', x: -2, y: -2, width: w + 4, height: hgt + 4, rx: 16 }),
+    s('rect', { class: 'card', width: w, height: hgt, rx: 14 }),
+    s('circle', { class: 'sdot', cx: 19, cy: 24, r: 5 }),
+    s('text', { class: 't1', x: 33, y: 29 }), s('text', { class: 't2', x: 19, y: 50 }), s('text', { class: 't3', x: 19, y: 69 }))
   flow.nodes[id] = { g, t1: g.children[3], t2: g.children[4], t3: g.children[5] }
   return g
 }
 
-function fedge(id, [x1, y1], [x2, y2]) {
-  const mx = (x1 + x2) / 2
-  return (flow.edges[id] = s('path', { class: 'edge', d: `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}` }))
+// A pending permission prompt with Allow / Deny buttons you can click on the diagram itself.
+function permNode(x, y, w, hgt) {
+  const g = s('g', { class: 'fnode', 'data-st': 'permission', transform: `translate(${x},${y})` },
+    s('rect', { class: 'pulse', x: -2, y: -2, width: w + 4, height: hgt + 4, rx: 16 }),
+    s('rect', { class: 'card', width: w, height: hgt, rx: 14 }))
+  const fo = document.createElementNS(NS, 'foreignObject')
+  fo.setAttribute('x', 0); fo.setAttribute('y', 0); fo.setAttribute('width', w); fo.setAttribute('height', hgt)
+  const box = document.createElement('div')
+  box.className = 'permbox'
+  box.innerHTML = '<div class="permhead"><span class="pill">permission</span><span class="permwhat"></span></div>' +
+    '<div class="permdir"></div>' +
+    '<div class="permbtns"><button class="allow">Allow</button><button class="deny">Deny</button>' +
+    '<label class="remember"><input type="checkbox"> always allow this folder</label></div>'
+  fo.append(box)
+  g.append(fo)
+  flow.nodes.perm = { g, div: box }
+  return g
 }
 
-// Rebuild the drawing only when the set of agents changes; otherwise just update it in place.
+function fedge(id, [x1, y1], [x2, y2], cls = 'edge') {
+  const mx = (x1 + x2) / 2
+  return (flow.edges[id] = s('path', { class: cls, d: `M${x1},${y1} C${mx},${y1} ${mx},${y2} ${x2},${y2}` }))
+}
+
+// Fit the diagram to the real pixel size of its box, so it always fills the screen.
+function sizeFlow() {
+  const el = $('flow')
+  const w = Math.max(760, el.clientWidth || 1200)
+  const h = Math.max(430, el.clientHeight || 560)
+  if (w === flow.W && h === flow.H) return
+  flow.W = w; flow.H = h; flow.sig = '' // force a rebuild at the new size
+}
+
+// Rebuild only when the set of agents, a pending prompt, or the size changes.
 function layoutFlow() {
   const list = flowAgents()
-  const sig = list.map((a) => a.key).join('|')
+  const sig = list.map((a) => a.key).join('|') + `|perm:${flow.permVisible ? 1 : 0}|${flow.W}x${flow.H}`
   if (sig === flow.sig) return list
   flow.sig = sig
-  const AH = 68, GAP = 12
-  const H = Math.max(250, list.length * (AH + GAP) + 28)
-  const cy = H / 2, hx = 480, hr = 50, ax = 718
-  $('flow').setAttribute('viewBox', `0 0 1000 ${H}`)
+  const W = flow.W, H = flow.H
+  const SRCW = Math.min(240, W * 0.2), SRCX = 16, SRCH = 88
+  const AW = Math.min(330, W * 0.3), AX = W - 16 - AW
+  const hr = Math.max(52, Math.min(70, H * 0.11))
+  const cy = H / 2, hx = (SRCX + SRCW + AX) / 2
+  $('flow').setAttribute('viewBox', `0 0 ${W} ${H}`)
+  $('flow').setAttribute('preserveAspectRatio', 'xMidYMid meet')
   flow.nodes = {}; flow.edges = {}; flow.particles = []
   const edges = s('g'), nodes = s('g')
   flow.layer = s('g')
-  nodes.append(fnode('claude', 18, cy - 88, 232, AH), fnode('dash', 18, cy + 20, 232, AH))
-  edges.append(fedge('claude', [250, cy - 54], [hx - hr, cy]), fedge('dash', [250, cy + 54], [hx - hr, cy]))
-  const top = (H - list.length * (AH + GAP) + GAP) / 2
+  nodes.append(fnode('dash', SRCX, cy - SRCH / 2, SRCW, SRCH))
+  edges.append(fedge('dash', [SRCX + SRCW, cy], [hx - hr, cy]))
+  const AH = Math.max(58, Math.min(84, (H - 40) / Math.max(list.length, 1) - 10))
+  const step = list.length ? (H - 40) / list.length : H
   list.forEach((a, i) => {
-    const y = top + i * (AH + GAP)
-    nodes.append(fnode(a.key, ax, y, 264, AH))
-    edges.append(fedge(a.key, [hx + hr, cy], [ax, y + AH / 2]))
+    const y = 20 + i * step + (step - AH) / 2
+    nodes.append(fnode(a.key, AX, y, AW, AH))
+    edges.append(fedge(a.key, [hx + hr, cy], [AX, y + AH / 2]))
   })
+  if (flow.permVisible) {
+    const PW = Math.min(380, W * 0.44), PH = 118
+    const px = W / 2 - PW / 2, py = H - PH - 4
+    nodes.append(permNode(px, py, PW, PH))
+    edges.append(fedge('perm', [hx, cy + hr], [px + PW / 2, py], 'edge perm-link'))
+  }
   const hub = s('g', { class: 'hub', transform: `translate(${hx},${cy})` },
-    s('circle', { class: 'halo', r: hr + 12 }), s('circle', { class: 'ring', r: hr + 7 }), s('circle', { class: 'core', r: hr }),
-    s('text', { class: 'hubt', y: 7, 'text-anchor': 'middle' }, 'orch'), s('text', { class: 'hubs', y: hr + 30, 'text-anchor': 'middle' }))
+    s('circle', { class: 'halo', r: hr + 14 }), s('circle', { class: 'ring', r: hr + 8 }), s('circle', { class: 'core', r: hr }),
+    s('text', { class: 'hubt', y: 7, 'text-anchor': 'middle' }, 'orch'), s('text', { class: 'hubs', y: hr + 34, 'text-anchor': 'middle' }))
   flow.nodes.hub = { g: hub, sub: hub.children[4] }
   const defs = s('defs', {},
+    s('radialGradient', { id: 'coreGrad' },
+      s('stop', { offset: '0', 'stop-color': 'color-mix(in srgb, var(--a1) 40%, transparent)' }), s('stop', { offset: '1', 'stop-color': 'transparent' })),
     s('filter', { id: 'glow', x: '-50%', y: '-50%', width: '200%', height: '200%' },
-      s('feGaussianBlur', { stdDeviation: 3.5, result: 'b' }), s('feMerge', {}, s('feMergeNode', { in: 'b' }), s('feMergeNode', { in: 'SourceGraphic' }))),
-    s('radialGradient', { id: 'coreg' }, s('stop', { offset: '0%', style: 'stop-color:var(--accent);stop-opacity:.45' }), s('stop', { offset: '100%', style: 'stop-color:var(--accent);stop-opacity:.06' })))
-  $('flow').replaceChildren(defs, edges, hub, nodes, flow.layer)
+      s('feGaussianBlur', { stdDeviation: 3.5, result: 'b' }), s('feMerge', {}, s('feMergeNode', { in: 'b' }), s('feMergeNode', { in: 'SourceGraphic' }))))
+  $('flow').replaceChildren(defs, edges, nodes, hub, flow.layer)
   return list
 }
 
 function setNode(id, st, t1, t2, t3) {
   const n = flow.nodes[id]
-  if (!n) return
+  if (!n || !n.t1) return
   n.g.dataset.st = st
   n.t1.textContent = t1; n.t2.textContent = t2; n.t3.textContent = t3
 }
 
+async function decidePermission(allow) {
+  const run = [...state.runs.values()].find((r) => r.permission)
+  if (!run) return
+  const remember = !!flow.nodes.perm?.div.querySelector('.remember input')?.checked
+  await api('POST', `/api/runs/${run.id}/permission`, { permissionId: run.permission.id, allow, remember })
+}
+
 function renderFlow() {
+  sizeFlow()
+  const perm = [...state.runs.values()].find((r) => r.permission)
+  flow.permVisible = !!perm
   const list = layoutFlow()
   const now = Date.now()
   const runs = [...state.runs.values()]
-  const running = runs.filter((r) => r.status === 'running')
+  const running = runs.filter((r) => r.status === 'running' && !r.children?.length)
   const queued = runs.filter((r) => r.status === 'queued').length
-  const sessions = [...state.sessions.values()].sort((a, b) => b.lastActivity - a.lastActivity)
-  const limited = sessions.find((x) => x.limited)
-  const active = sessions.filter((x) => x.status === 'active').length
-  const fromClaude = running.filter((r) => r.source !== 'dashboard')
-  const fromDash = running.filter((r) => r.source === 'dashboard')
-
-  setNode('claude', limited ? 'limited' : active || fromClaude.length ? 'running' : 'idle', 'Claude Code',
-    limited ? `limit hit · resets ${fit(limited.limitText.split('resets')[1], 26)}` : `${active} active session${active === 1 ? '' : 's'} · ${fromClaude.length} delegated`,
-    fit(limited ? 'work continues on free agents' : sessions[0]?.lastTool || 'waiting', 34))
-  setNode('dash', fromDash.length ? 'running' : 'idle', 'You · dashboard', `${fromDash.length} task${fromDash.length === 1 ? '' : 's'} running`, fromDash.length ? fit(fromDash[0].title, 34) : 'start one below')
-  flow.edges.claude?.classList.toggle('active', fromClaude.length > 0)
-  flow.edges.claude?.classList.toggle('handoff', fromClaude.some((r) => r.chain === 'handoff'))
-  flow.edges.dash?.classList.toggle('active', fromDash.length > 0)
-
+  const planning = runs.filter((r) => r.status === 'planning').length
+  setNode('dash', running.length || planning || perm ? 'running' : 'idle', 'You · dashboard',
+    `${running.length} working${queued ? ` · ${queued} queued` : ''}${planning ? ` · ${planning} planning` : ''}${perm ? ' · waiting on you' : ''}`,
+    running.length ? fit(running[0].title, 40) : planning ? 'planning a task…' : perm ? 'needs your permission below' : 'start a task →')
+  flow.edges.dash?.classList.toggle('active', running.length + planning > 0)
   flow.nodes.hub.g.dataset.st = running.length ? 'running' : 'idle'
-  flow.nodes.hub.sub.textContent = `${running.length} running · ${queued} queued`
-
+  flow.nodes.hub.sub.textContent = `${running.length} working · ${queued} queued`
   let busy = 0, cooling = 0
   for (const a of list) {
     const run = running.find((r) => `${r.agent}:${r.model}` === a.key)
     const cool = state.cooldowns[a.key] > now
     const out = flow.outcome.get(a.key)
-    const st = run ? 'running' : cool ? 'cooling' : a.enabled ? 'idle' : 'disabled'
+    const st = run ? 'running' : cool ? 'cooling' : a.local ? 'local' : a.enabled ? 'idle' : 'disabled'
     busy += !!run; cooling += cool
     const t3 = run ? flow.activity.get(a.key) || 'working…'
       : out && now - out.t < 8000 ? out.text
-      : cool ? `cooling down · ${dur(now, state.cooldowns[a.key])} left` : a.enabled ? 'idle · ready' : 'disabled'
-    setNode(a.key, st, fit(a.model.replace(/^opencode\//, ''), 27), fit(`${a.agent} · ${a.tags.join(' · ')}`, 40), fit(t3, 38))
+      : cool ? `cooling · ${dur(now, state.cooldowns[a.key])} left` : a.local ? 'ready for simple tasks' : a.enabled ? 'idle · ready' : 'disabled'
+    setNode(a.key, st, fit(short(a.model), 30), fit(`${a.agent} · ${a.tags.join(' · ')}`, 46), fit(t3, 44))
     flow.edges[a.key].classList.toggle('active', !!run)
-    flow.edges[a.key].classList.toggle('handoff', run?.chain === 'handoff')
   }
-  $('flowStats').textContent = `${busy} working · ${cooling} cooling down · ${list.length - busy - cooling} ready`
+  if (perm && flow.nodes.perm) {
+    flow.nodes.perm.div.querySelector('.permwhat').textContent = perm.permission.what
+    flow.nodes.perm.div.querySelector('.permdir').textContent = perm.permission.detail || perm.dir || ''
+    flow.nodes.perm.div.querySelector('.allow').onclick = () => decidePermission(true)
+    flow.nodes.perm.div.querySelector('.deny').onclick = () => decidePermission(false)
+  }
+  $('flowStats').textContent = `${busy} working · ${cooling} cooling · ${list.length - busy - cooling} ready${perm ? ' · 1 needs permission' : ''}`
 }
 
 // A glowing comet that travels along an edge.
@@ -456,7 +574,7 @@ function spark(edgeId, cls, { reverse = false, ms = 1000, then } = {}) {
   if (!path || reduceMotion || document.hidden) return then?.()
   const len = path.getTotalLength()
   const start = path.getPointAtLength(reverse ? len : 0)
-  const trail = [0, 1, 2, 3].map((i) => s('circle', { class: `particle ${cls}`, r: 5.5 - i * 1.2, opacity: 1 - i * 0.22, cx: start.x, cy: start.y }))
+  const trail = [0, 1, 2, 3].map((i) => s('circle', { class: `particle ${cls}`, r: 6 - i * 1.3, opacity: 1 - i * 0.22, cx: start.x, cy: start.y }))
   flow.layer.append(...trail)
   flow.particles.push({ path, len, t0: performance.now(), ms, reverse, trail, then })
   if (!flow.raf) flow.raf = requestAnimationFrame(stepParticles)
@@ -476,7 +594,7 @@ function stepParticles(now) {
     return true
   })
   flow.raf = 0
-  finished.forEach((p) => p.then?.()) // after the list is replaced, so comets they start aren't lost
+  finished.forEach((p) => p.then?.())
   if (flow.particles.length && !flow.raf) flow.raf = requestAnimationFrame(stepParticles)
 }
 
@@ -489,7 +607,7 @@ function flash(id, cls) {
 
 function ticker(ev) {
   const box = $('ticker')
-  box.prepend(h('div', { class: `chip k-${ev.kind}` }, h('b', {}, fit(ev.model?.replace(/^opencode\//, ''), 26)), fit(ev.text, 140)))
+  box.prepend(h('div', { class: `chip k-${ev.kind}` }, h('b', {}, fit(short(ev.model), 26)), fit(ev.text, 160)))
   while (box.children.length > 5) box.lastChild.remove()
 }
 
@@ -497,41 +615,84 @@ function flowOn(msg) {
   if (!state.config || !flow.layer) return
   if (msg.type === 'run') {
     const r = msg.run, prev = state.runs.get(r.id)
-    const src = r.source === 'dashboard' ? 'dash' : 'claude'
     const key = `${r.agent}:${r.model}`
-    const cls = r.chain === 'handoff' ? 'p-handoff' : 'p-task'
+    const cls = r.plan?.local ? 'p-local' : 'p-task'
     if (r.status === 'running' && r.agent && (prev?.agent !== r.agent || prev?.model !== r.model)) {
       flow.activity.set(key, `starting: ${r.title}`)
       const toAgent = () => { renderFlow(); spark(key, cls, { then: () => flash(key, 'flash-go') }) }
-      // A fallback leaves straight from the hub; a new task travels source → hub → agent.
-      if (prev?.agent) toAgent()
-      else spark(src, cls, { ms: 800, then: () => { flash('hub', 'flash-go'); toAgent() } })
+      if (prev?.agent) toAgent() // a fallback leaves straight from the hub
+      else spark('dash', cls, { ms: 800, then: () => { flash('hub', 'flash-go'); toAgent() } })
     }
     if (prev && prev.status !== r.status && ['done', 'failed', 'killed'].includes(r.status) && r.agent) {
       const ok = r.status === 'done', pc = ok ? 'p-ok' : 'p-bad'
-      flow.outcome.set(key, { t: Date.now(), text: `${ok ? '✓ finished' : r.status === 'killed' ? '■ stopped' : '✗ failed'}: ${r.title}` })
-      flash(key, ok ? 'flash-ok' : 'flash-bad')
-      spark(key, pc, { reverse: true, ms: 900, then: () => spark(src, pc, { reverse: true, ms: 800, then: () => flash(src, ok ? 'flash-ok' : 'flash-bad') }) })
+      flow.outcome.set(`${r.agent}:${r.model}`, { t: Date.now(), text: `${ok ? '✓ finished' : r.status === 'killed' ? '■ stopped' : '✗ failed'}: ${r.title}` })
+      flash(`${r.agent}:${r.model}`, ok ? 'flash-ok' : 'flash-bad')
+      spark(`${r.agent}:${r.model}`, pc, { reverse: true, ms: 900, then: () => spark('dash', pc, { reverse: true, ms: 800 }) })
     }
   }
   if (msg.type === 'event') {
     const ev = msg.ev, key = `${ev.agent}:${ev.model}`
-    if (ev.kind === 'tool' || ev.kind === 'text') {
-      flow.activity.set(key, ev.kind === 'tool' ? `▸ ${ev.text}` : `“${ev.text}”`)
-      flash(key, 'flash-tick')
-    }
-    if (ev.kind === 'error' || (ev.kind === 'info' && /failed/.test(ev.text))) {
-      flash(key, 'flash-bad')
-      spark(key, 'p-bad', { reverse: true, ms: 700 })
-    }
+    if (ev.kind === 'tool' || ev.kind === 'text') { flow.activity.set(key, ev.kind === 'tool' ? `▸ ${ev.text}` : `“${ev.text}”`); flash(key, 'flash-tick') }
+    if (ev.kind === 'error' || (ev.kind === 'info' && /failed/.test(ev.text))) { flash(key, 'flash-bad'); spark(key, 'p-bad', { reverse: true, ms: 700 }) }
     if (ev.kind !== 'info' || /failed|skip/.test(ev.text)) ticker(ev)
   }
-  if (msg.type === 'session') {
-    const prev = state.sessions.get(msg.session.id)
-    if (msg.session.limited && prev && !prev.limited) { flash('claude', 'flash-bad'); spark('claude', 'p-handoff', { ms: 1000 }) }
-    else if (prev && msg.session.lastTool !== prev.lastTool) flash('claude', 'flash-tick')
-  }
 }
+
+// ---------- Sub-agent plan cards: auto fold/expand ----------
+function renderPlans() {
+  const parents = [...state.runs.values()].filter((r) => (r.children || []).length).sort((a, b) => b.createdAt - a.createdAt).slice(0, 8)
+  $('plans').replaceChildren(...parents.map((r) => {
+    const kids = r.children.map((id) => state.runs.get(id)).filter(Boolean)
+    const live = ['running', 'planning', 'queued'].includes(r.status)
+    const collapsed = !live
+    const subs = h('div', { class: 'subs', style: `max-height:${collapsed ? 0 : kids.length * 24 + 8}px` },
+      ...kids.map((k) => h('div', { class: `sub ${k.status}` },
+        h('span', { class: 'bar' }),
+        h('span', { class: 'grow', title: k.title }, k.title),
+        h('span', { class: 'muted' }, k.agent ? short(k.model) : k.status))))
+    return h('div', { class: `plan${live ? ' live' : ''}` },
+      h('div', { class: 'ptop' },
+        h('span', { class: `pill s-${r.status}` }, r.status),
+        h('span', { class: 'tag' + (r.plan?.local ? ' local' : '') }, r.plan?.tag || 'plan')),
+      h('div', { class: 'ptitle', title: r.title }, r.title),
+      subs,
+      h('div', { class: 'psum' }, collapsed ? `${kids.filter((k) => k.status === 'done').length}/${kids.length} parts done` : `fanned out to ${kids.length} agents`))
+  }))
+}
+
+// ---------- Wiring ----------
+const es = new EventSource('/events')
+es.onopen = () => { $('dot').classList.add('on'); load() }
+es.onerror = () => $('dot').classList.remove('on')
+es.onmessage = (m) => {
+  const msg = JSON.parse(m.data)
+  flowOn(msg) // before state changes, so it can compare old and new
+  if (msg.type === 'run') state.runs.set(msg.run.id, msg.run)
+  if (msg.type === 'session') state.sessions.set(msg.session.id, msg.session)
+  if (msg.type === 'config') { state.config = msg.config; state.cooldowns = msg.cooldowns }
+  if (msg.type === 'event' && msg.ev.runId === selected) feed.push(msg.ev)
+  if (msg.type === 'run' && !selected && msg.run.status === 'running') return select(msg.run.id)
+  render((msg.type === 'run' && msg.run.id === selected) || (msg.type === 'event' && msg.ev.runId === selected))
+}
+
+$('maxParallel').onchange = (e) => api('PUT', '/api/config', { maxParallel: Number(e.target.value) })
+$('clearCool').onclick = () => api('DELETE', '/api/cooldowns')
+$('fanout').onchange = (e) => api('PUT', '/api/config', { fanout: e.target.checked })
+$('localEnabled').onchange = (e) => api('PUT', '/api/config', { local: { ...state.config.local, enabled: e.target.checked } })
+$('start').onclick = async () => {
+  const [agent, model] = $('model').value ? $('model').value.split('|') : []
+  const r = await api('POST', '/api/runs', { task: $('task').value, dir: $('dir').value.trim(), chain: $('chain').value, agent, model, source: 'dashboard' })
+  if (r) { $('task').value = ''; select(r.id) }
+}
+setInterval(() => render(false), 1000) // keep elapsed times and cooldown countdowns fresh
+
+fetch('/api/models').then((r) => r.json()).then((all) => {
+  for (const [agent, list] of Object.entries(all)) {
+    $(`models-${agent}`)?.replaceChildren(...[...list].sort((a, b) => /free/.test(b) - /free/.test(a)).map((m) => h('option', { value: m }, /free/.test(m) ? 'free' : agent)))
+  }
+})  .catch(() => {})
+
+if (typeof ResizeObserver !== 'undefined') new ResizeObserver(() => { flow.sig = ''; render(false) }).observe($('flow'))
 </script>
 </body>
 </html>

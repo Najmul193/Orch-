@@ -3,11 +3,9 @@
   "defaultDir": "~/clt",
   "maxParallel": 3,
   "cooldownMinutes": 15,
-
   "claudeHandoff": false,
   "autoHandoff": false,
   "claudeProjectsDir": "~/.claude/projects",
-
   "autoPool": true,
   "poolLimit": 6,
   "poolPrefer": [
@@ -22,32 +20,122 @@
     "space-bunny-free"
   ],
   "routing": {
-    "code": ["glm-5.3-flash-free", "deepseek-v4.1-flash-free", "nemotron-3-ultra-free"],
-    "ui": ["nemotron-3.5-super-vl-free", "glm-5.3-flash-free", "mimo-v2.6-flash-free"],
-    "docs": ["deepseek-v4.1-flash-free", "beam-free", "space-bunny-free"],
-    "research": ["nemotron-3.5-lightning-free", "beam-free", "glm-5.3-flash-free"],
-    "data": ["nemotron-3-ultra-free", "deepseek-v4.1-flash-free", "longcat-2.5-preview-free"],
-    "general": ["glm-5.3-flash-free", "deepseek-v4.1-flash-free", "mimo-v2.6-flash-free"]
+    "code": [
+      "glm-5.3-flash-free",
+      "deepseek-v4.1-flash-free",
+      "nemotron-3-ultra-free"
+    ],
+    "ui": [
+      "nemotron-3.5-super-vl-free",
+      "glm-5.3-flash-free",
+      "mimo-v2.6-flash-free"
+    ],
+    "docs": [
+      "deepseek-v4.1-flash-free",
+      "beam-free",
+      "space-bunny-free"
+    ],
+    "research": [
+      "nemotron-3.5-lightning-free",
+      "beam-free",
+      "glm-5.3-flash-free"
+    ],
+    "data": [
+      "nemotron-3-ultra-free",
+      "deepseek-v4.1-flash-free",
+      "longcat-2.5-preview-free"
+    ],
+    "general": [
+      "glm-5.3-flash-free",
+      "deepseek-v4.1-flash-free",
+      "mimo-v2.6-flash-free"
+    ]
   },
-
   "fanout": true,
   "plannerModel": "glm-5.3-flash-free",
-
-  "local": {
-    "enabled": false,
-    "baseUrl": "http://127.0.0.1:11434/v1/chat/completions",
-    "model": "qwen3:8b"
+  "permissions": {
+    "mode": "ask",
+    "trusted": []
   },
-
   "chains": {
     "delegate": [
-      { "agent": "opencode", "model": "opencode/glm-5.3-flash-free", "enabled": true },
-      { "agent": "opencode", "model": "opencode/deepseek-v4.1-flash-free", "enabled": true },
-      { "agent": "agy", "model": "gemini-3.8-flash-medium", "enabled": true }
+      {
+        "agent": "opencode",
+        "model": "opencode/glm-5.3-flash-free",
+        "enabled": true
+      },
+      {
+        "agent": "opencode",
+        "model": "opencode/deepseek-v4.1-flash-free",
+        "enabled": true
+      },
+      {
+        "agent": "opencode",
+        "model": "opencode/nemotron-3-ultra-free",
+        "enabled": true
+      },
+      {
+        "agent": "opencode",
+        "model": "opencode/nemotron-3.5-super-vl-free",
+        "enabled": true
+      },
+      {
+        "agent": "opencode",
+        "model": "opencode/nemotron-3.5-lightning-free",
+        "enabled": true
+      },
+      {
+        "agent": "opencode",
+        "model": "opencode/longcat-2.5-preview-free",
+        "enabled": true
+      },
+      {
+        "agent": "agy",
+        "model": "gemini-3.8-flash-high",
+        "enabled": true
+      },
+      {
+        "agent": "agy",
+        "model": "gemini-3.8-flash-medium",
+        "enabled": true
+      },
+      {
+        "agent": "agy",
+        "model": "gemini-3.8-flash-low",
+        "enabled": true
+      },
+      {
+        "agent": "agy",
+        "model": "claude-sonnet-4-6",
+        "enabled": true
+      },
+      {
+        "agent": "agy",
+        "model": "claude-opus-4-6-thinking",
+        "enabled": true
+      },
+      {
+        "agent": "agy",
+        "model": "gpt-oss-120b-medium",
+        "enabled": true
+      }
     ],
     "handoff": [
-      { "agent": "agy", "model": "gemini-3.8-flash-high", "enabled": true },
-      { "agent": "opencode", "model": "opencode/glm-5.3-flash-free", "enabled": true }
+      {
+        "agent": "agy",
+        "model": "gemini-3.8-flash-high",
+        "enabled": true
+      },
+      {
+        "agent": "opencode",
+        "model": "opencode/glm-5.3-flash-free",
+        "enabled": true
+      }
     ]
+  },
+  "local": {
+    "enabled": true,
+    "baseUrl": "http://127.0.0.1:11434/v1/chat/completions",
+    "model": "qwen3:8b"
   }
 }
