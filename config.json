@@ -52,6 +52,8 @@
     ]
   },
   "fanout": true,
+  "heartbeatMs": 5000,
+  "plannerTimeoutMs": 25000,
   "plannerModel": "glm-5.3-flash-free",
   "permissions": {
     "mode": "ask",

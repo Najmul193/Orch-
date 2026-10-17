@@ -81,9 +81,12 @@ export class Runner extends EventEmitter {
     // model for this kind of task. The rest of the chain still backs it up.
     if (!model && !agent) {
       const r = this.planner.route(task, this.config, this.pool)
+      // Always record the plan (tag + whether it is big enough to fan out), even
+      // before the model pool is discovered and a pick exists yet.
+      run.plan = { tag: r.tag, complex: r.complex, ...(r.pick ? { agent: r.pick.agent, model: r.pick.model } : {}), local: r.local }
       if (r.pick) {
         run.want = { ...r.pick }
-        run.plan = { tag: r.tag, complex: r.complex, agent: r.pick.agent, model: r.pick.model, local: r.local }
+        this.#event(run, { kind: 'info', text: `routed ${r.tag} -> ${r.local ? 'local ' : ''}${r.pick.model}` })
       }
     }
     this.#changed(run)
@@ -145,7 +148,38 @@ export class Runner extends EventEmitter {
     run.children = subtasks.map((s, i) => this.#child(run, s, picks[i]))
     for (const cid of run.children) this.queue.push(this.runs.get(cid))
     this.#changed(run)
+    this.#ensureBeat()
     this.#pump()
+  }
+
+  // Supervisor: while a fan-out has children in flight, report their progress on
+  // the parent every few seconds so the diagram keeps you posted.
+  #ensureBeat() {
+    if (this.beat) return
+    this.beat = setInterval(() => this.#reportAll(), this.config.heartbeatMs ?? 5000)
+    this.beat.unref?.()
+  }
+
+  #reportAll() {
+    let active = 0
+    for (const run of this.runs.values()) {
+      if (!run.children?.length || FINISHED.has(run.status)) continue
+      active++
+      this.#report(run)
+    }
+    if (!active && this.beat) { clearInterval(this.beat); this.beat = null }
+  }
+
+  #report(run) {
+    const kids = run.children.map((id) => this.runs.get(id)).filter(Boolean)
+    if (!kids.length) return
+    const done = kids.filter((k) => k.status === 'done').length
+    const bad = kids.filter((k) => k.status === 'failed' || k.status === 'killed').length
+    const working = kids.filter((k) => ['running', 'queued', 'waiting'].includes(k.status))
+    const where = working.map((k) => `${String(k.model).replace(/^opencode\//, '')} ${k.status === 'running' ? k.phase || 'working' : k.status}`).slice(0, 3).join(', ')
+    run.phase = `fanout ${done}/${kids.length}`
+    this.#event(run, { kind: 'info', text: `progress ${done}/${kids.length} done${bad ? `, ${bad} failed` : ''}${where ? ` · ${where}` : ''}` })
+    this.#changed(run)
   }
 
   #child(run, sub, entry) {

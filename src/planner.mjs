@@ -64,7 +64,10 @@ export async function split(task, { model, dir, config } = {}) {
   const useLocal = config?.local?.enabled && config.local.model
   const agent = useLocal ? 'local' : 'opencode'
   const plannerModel = useLocal ? config.local.model : (model || config?.plannerModel || 'opencode/glm-5.3-flash-free')
-  const text = await runOnce(splitPrompt(task), plannerModel, dir, agent, config).catch(() => '')
+  // A small local model can be slow to answer; don't let it stall the whole run —
+  // time out sooner and let fallbackSplit take over.
+  const timeoutMs = config?.plannerTimeoutMs || (useLocal ? 25_000 : 45_000)
+  const text = await runOnce(splitPrompt(task), plannerModel, dir, agent, config, timeoutMs).catch(() => '')
   return parseSplit(text)
 }
 
